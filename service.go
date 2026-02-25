@@ -63,12 +63,12 @@ func (s *Service) Type() ServiceType {
 }
 
 func (state *ServiceState) ensureRunningProcess() error {
-	state.Mu.Lock()
-	defer state.Mu.Unlock()
-
-	if state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil {
+	if state.IsRunning() {
 		return nil
 	}
+
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
 
 	if len(state.Service.Start) == 0 {
 		return nil
@@ -160,4 +160,16 @@ func (state *ServiceState) stop() {
 		state.Cmd.Wait()
 	}
 	state.Cmd = nil
+}
+
+func (state *ServiceState) IsRunning() bool {
+	state.Mu.Lock()
+	defer state.Mu.Unlock()
+
+	switch state.Service.Type() {
+	case ServiceTypeProxy:
+		return state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil
+	default:
+		return true
+	}
 }

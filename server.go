@@ -194,9 +194,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 			"status": "ok",
 		})
 	case "status":
-		state.Mu.Lock()
-		running := state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil
-		state.Mu.Unlock()
+		running := state.IsRunning()
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"running": running,
 		})
@@ -218,9 +216,9 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 	result := make(map[string]interface{})
 
 	for name, state := range s.Services {
+		running := state.IsRunning()
 		state.Mu.Lock()
-		running := state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil
-		state.Mu.Unlock()
+		defer state.Mu.Unlock()
 
 		status := "stopped"
 		if running {
