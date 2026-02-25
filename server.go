@@ -81,22 +81,23 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	state.Mu.Unlock()
 
-	if svc.API {
+	switch svc.Type() {
+	case ServiceTypeAPI:
 		s.handleAPI(w, r, state)
-		return
-	}
-
-	if err := s.ensureRunning(state); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	if svc.ServeFiles != "" {
+	case ServiceTypeFiles:
+		if err := s.ensureRunning(state); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
+			return
+		}
 		s.serveFiles(w, r, svc.ServeFiles)
-	} else if svc.ForwardsTo != "" {
+	case ServiceTypeProxy:
+		if err := s.ensureRunning(state); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
+			return
+		}
 		s.proxyRequest(w, r, svc.ForwardsTo)
-	} else {
-		http.Error(w, "Service not configured to serve files or proxy", http.StatusInternalServerError)
+	default:
+		http.Error(w, "Service not configured", http.StatusInternalServerError)
 	}
 }
 

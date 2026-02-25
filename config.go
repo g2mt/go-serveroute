@@ -17,14 +17,37 @@ type Config struct {
 	Services          map[string]Service `yaml:"services"`
 }
 
+type ServiceType int
+
+const (
+	ServiceTypeUnknown ServiceType = iota
+	ServiceTypeFiles
+	ServiceTypeProxy
+	ServiceTypeAPI
+)
+
 type Service struct {
 	Subdomain  string   `yaml:"subdomain"`
 	ServeFiles string   `yaml:"serve_files"`
 	ForwardsTo string   `yaml:"forwards_to"`
+	API        bool     `yaml:"api"`
 	Start      []string `yaml:"start"`
 	Stop       []string `yaml:"stop"`
 	Timeout    int      `yaml:"timeout"`
-	API        bool     `yaml:"api"`
+}
+
+func (s *Service) Type() ServiceType {
+	if s.ServeFiles != "" {
+		return ServiceTypeFiles
+	}
+	if s.ForwardsTo != "" {
+		return ServiceTypeProxy
+	}
+	if s.API {
+		return ServiceTypeAPI
+	}
+
+	return ServiceTypeUnknown
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -40,6 +63,12 @@ func LoadConfig(path string) (*Config, error) {
 
 	if cfg.Listen.HTTP == "" {
 		return nil, fmt.Errorf("http listen address is required")
+	}
+
+	for name, svc := range cfg.Services {
+		if svc.Type() == ServiceTypeUnknown {
+			return nil, fmt.Errorf("service %s: one of serve_files, forwards_to, or api must be set", name)
+		}
 	}
 
 	return &cfg, nil
