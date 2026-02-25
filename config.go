@@ -17,39 +17,6 @@ type Config struct {
 	Services          map[string]Service `yaml:"services"`
 }
 
-type ServiceType int
-
-const (
-	ServiceTypeUnknown ServiceType = iota
-	ServiceTypeFiles
-	ServiceTypeProxy
-	ServiceTypeAPI
-)
-
-type Service struct {
-	Subdomain  string   `yaml:"subdomain"`
-	ServeFiles string   `yaml:"serve_files"`
-	ForwardsTo string   `yaml:"forwards_to"`
-	API        bool     `yaml:"api"`
-	Start      []string `yaml:"start"`
-	Stop       []string `yaml:"stop"`
-	Timeout    int      `yaml:"timeout"`
-}
-
-func (s *Service) Type() ServiceType {
-	if s.ServeFiles != "" {
-		return ServiceTypeFiles
-	}
-	if s.ForwardsTo != "" {
-		return ServiceTypeProxy
-	}
-	if s.API {
-		return ServiceTypeAPI
-	}
-
-	return ServiceTypeUnknown
-}
-
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

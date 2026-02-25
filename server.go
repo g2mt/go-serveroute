@@ -8,21 +8,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
 )
-
-type ServiceState struct {
-	Name     string
-	Service  *Service
-	Cmd      *exec.Cmd
-	LastUsed time.Time
-	Timer    *time.Timer
-	Mu       sync.Mutex
-}
 
 type Server struct {
 	Config   *Config
@@ -77,7 +66,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		if svc.Timeout > 0 {
 			state.Timer = time.AfterFunc(time.Duration(svc.Timeout)*time.Second, func() {
-				s.stopService(svcName)
+				state.stop()
 			})
 		}
 	}
@@ -89,7 +78,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	case ServiceTypeFiles:
 		s.serveFiles(w, r, svc.ServeFiles)
 	case ServiceTypeProxy:
-		if err := s.ensureRunningProcess(state); err != nil {
+		if err := state.ensureRunningProcess(); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -141,91 +130,6 @@ func (s *Server) getOrCreateState(name string, svc *Service) *ServiceState {
 	return state
 }
 
-func (s *Server) ensureRunningProcess(state *ServiceState) error {
-	state.Mu.Lock()
-	defer state.Mu.Unlock()
-
-	if state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil {
-		return nil
-	}
-
-	if len(state.Service.Start) == 0 {
-		return nil
-	}
-
-	log.Printf("Starting service %s: %v", state.Name, state.Service.Start)
-
-	cmd := exec.Command(state.Service.Start[0], state.Service.Start[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting service: %w", err)
-	}
-
-	state.Cmd = cmd
-
-	if err := s.waitForService(state); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Server) waitForService(state *ServiceState) error {
-	target := state.Service.ForwardsTo
-	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		target = "http://" + target
-	}
-
-	url, err := url.Parse(target)
-	if err != nil {
-		return fmt.Errorf("parsing target URL: %w", err)
-	}
-
-	maxRetries := 10
-	for i := 0; i < maxRetries; i++ {
-		resp, err := http.Get(url.String() + "/")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				return nil
-			}
-		}
-		time.Sleep(1 * time.Second)
-	}
-	return fmt.Errorf("service did not start in time")
-}
-
-func (s *Server) stopService(name string) {
-	s.Mu.RLock()
-	state, ok := s.Services[name]
-	s.Mu.RUnlock()
-
-	if !ok {
-		return
-	}
-
-	state.Mu.Lock()
-	defer state.Mu.Unlock()
-
-	if state.Cmd == nil || state.Cmd.Process == nil {
-		return
-	}
-
-	log.Printf("Stopping service %s", name)
-
-	if len(state.Service.Stop) > 0 {
-		cmd := exec.Command(state.Service.Stop[0], state.Service.Stop[1:]...)
-		cmd.Run()
-	} else {
-		state.Cmd.Process.Kill()
-	}
-
-	state.Cmd.Wait()
-	state.Cmd = nil
-}
-
 func (s *Server) serveFiles(w http.ResponseWriter, r *http.Request, path string) {
 	fs := http.FileServer(http.Dir(path))
 	http.StripPrefix("/", fs).ServeHTTP(w, r)
@@ -269,13 +173,13 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
 	case "start":
-		if err := s.ensureRunningProcess(state); err != nil {
+		if err := state.ensureRunningProcess(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		io.WriteString(w, "started")
 	case "stop":
-		s.stopService(state.Name)
+		state.stop()
 		io.WriteString(w, "stopped")
 	case "status":
 		state.Mu.Lock()
