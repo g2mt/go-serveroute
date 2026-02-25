@@ -31,13 +31,14 @@ const (
 )
 
 type Service struct {
-	Subdomain  string   `yaml:"subdomain"`
-	ServeFiles string   `yaml:"serve_files"`
-	ForwardsTo string   `yaml:"forwards_to"`
-	API        bool     `yaml:"api"`
-	Start      []string `yaml:"start"`
-	Stop       []string `yaml:"stop"`
-	Timeout    int      `yaml:"timeout"`
+	Subdomain   string   `yaml:"subdomain"`
+	ServeFiles  string   `yaml:"serve_files"`
+	ForwardsTo  string   `yaml:"forwards_to"`
+	API         bool     `yaml:"api"`
+	Start       []string `yaml:"start"`
+	Stop        []string `yaml:"stop"`
+	Timeout     int      `yaml:"timeout"`
+	KillTimeout int      `yaml:"kill_timeout"`
 }
 
 func (s *Service) Type() ServiceType {
@@ -123,10 +124,33 @@ func (state *ServiceState) stop() {
 	if len(state.Service.Stop) > 0 {
 		cmd := exec.Command(state.Service.Stop[0], state.Service.Stop[1:]...)
 		cmd.Run()
+	} else if state.Service.KillTimeout > 0 {
+		// Try graceful shutdown first
+		if err := state.Cmd.Process.Signal(os.Interrupt); err != nil {
+			log.Printf("Failed to send SIGINT to service %s: %v", state.Name, err)
+			state.Cmd.Process.Kill()
+		} else {
+			// Wait for process to exit or timeout
+			done := make(chan error, 1)
+			go func() {
+				done <- state.Cmd.Wait()
+			}()
+
+			select {
+			case <-time.After(time.Duration(state.Service.KillTimeout) * time.Second):
+				log.Printf("Service %s shutdown timeout, killing process", state.Name)
+				state.Cmd.Process.Kill()
+				<-done // Wait for process to be killed
+			case <-done:
+				// Process exited normally
+			}
+		}
 	} else {
 		state.Cmd.Process.Kill()
 	}
 
-	state.Cmd.Wait()
+	if state.Cmd != nil && state.Cmd.ProcessState == nil {
+		state.Cmd.Wait()
+	}
 	state.Cmd = nil
 }

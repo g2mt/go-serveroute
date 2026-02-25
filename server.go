@@ -1,8 +1,8 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -170,27 +170,38 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request, target str
 }
 
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *ServiceState) {
+	w.Header().Set("Content-Type", "application/json")
+	
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
 	case "start":
 		if err := state.ensureRunningProcess(); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"status": "error",
+				"error":  err.Error(),
+			})
 			return
 		}
-		io.WriteString(w, "started")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+		})
 	case "stop":
 		state.stop()
-		io.WriteString(w, "stopped")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "ok",
+		})
 	case "status":
 		state.Mu.Lock()
 		running := state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil
 		state.Mu.Unlock()
-		if running {
-			io.WriteString(w, "running")
-		} else {
-			io.WriteString(w, "stopped")
-		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"running": running,
+		})
 	default:
-		http.Error(w, "Unknown API endpoint", http.StatusNotFound)
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "error",
+			"error":  "Unknown API endpoint",
+		})
 	}
 }
