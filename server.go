@@ -87,13 +87,9 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	case ServiceTypeAPI:
 		s.handleAPI(w, r, state)
 	case ServiceTypeFiles:
-		if err := s.ensureRunning(state); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
-			return
-		}
 		s.serveFiles(w, r, svc.ServeFiles)
 	case ServiceTypeProxy:
-		if err := s.ensureRunning(state); err != nil {
+		if err := s.ensureRunningProcess(state); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -145,7 +141,7 @@ func (s *Server) getOrCreateState(name string, svc *Service) *ServiceState {
 	return state
 }
 
-func (s *Server) ensureRunning(state *ServiceState) error {
+func (s *Server) ensureRunningProcess(state *ServiceState) error {
 	state.Mu.Lock()
 	defer state.Mu.Unlock()
 
@@ -168,9 +164,37 @@ func (s *Server) ensureRunning(state *ServiceState) error {
 	}
 
 	state.Cmd = cmd
-	time.Sleep(100 * time.Millisecond)
+
+	if err := s.waitForService(state); err != nil {
+		return err
+	}
 
 	return nil
+}
+
+func (s *Server) waitForService(state *ServiceState) error {
+	target := state.Service.ForwardsTo
+	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
+		target = "http://" + target
+	}
+
+	url, err := url.Parse(target)
+	if err != nil {
+		return fmt.Errorf("parsing target URL: %w", err)
+	}
+
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		resp, err := http.Get(url.String() + "/")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+				return nil
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
+	return fmt.Errorf("service did not start in time")
 }
 
 func (s *Server) stopService(name string) {
@@ -245,7 +269,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
 	case "start":
-		if err := s.ensureRunning(state); err != nil {
+		if err := s.ensureRunningProcess(state); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
