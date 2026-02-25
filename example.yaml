@@ -1,5 +1,6 @@
 # run example with `./serveroute -config example.yaml`
 
+domain: localhost
 listen:
   http: "127.0.0.1:8080" # required
   # https: "127.0.0.1:8443" # optional
@@ -16,7 +17,7 @@ services:
     start: ["/usr/bin/python", "-m", "http.server", "-d", "./public", "-b", "127.0.0.1", "8001"]
       # starts the command above when first entering subdomain
     # stop: [...] # optional, runs this command to stop the service
-    timeout: 30 # in seconds, if set (>0) then it will timeout if n seconds has passed AFTER the last packet sent to this subdomain
+    timeout: 5 # in seconds, if set (>0) then it will timeout if n seconds has passed AFTER the last packet sent to this subdomain
 
     # NOTE: sets the following HTTP headers on proxy (similar to nginx)
     # proxy_set_header Host $http_host;

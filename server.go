@@ -99,6 +99,8 @@ func (s *Server) findService(host string) (string, *Service) {
 		strings.HasSuffix(host, domain) &&
 		host[len(host)-len(domain)-1] == '.' {
 		subdomain = host[:len(host)-len(domain)-1]
+	} else if host == domain {
+		subdomain = ""
 	} else {
 		parts := strings.Split(host, ".")
 		if len(parts) >= 1 {
@@ -108,16 +110,8 @@ func (s *Server) findService(host string) (string, *Service) {
 		}
 	}
 
-	for name, svc := range s.Config.Services {
-		if svc.Subdomain == subdomain {
-			return name, &svc
-		}
-	}
-
-	for name, svc := range s.Config.Services {
-		if svc.Subdomain == "" {
-			return name, &svc
-		}
+	if namedSvc, ok := s.Config.servicesBySubdomain[subdomain]; ok {
+		return namedSvc.name, namedSvc.svc
 	}
 
 	return "", nil

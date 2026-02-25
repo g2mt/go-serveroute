@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+type NamedService struct {
+	name string
+	svc  *Service
+}
+
 type ServiceState struct {
 	Name     string
 	Service  *Service

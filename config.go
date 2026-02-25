@@ -12,10 +12,11 @@ type Config struct {
 		HTTP  string `yaml:"http"`
 		HTTPS string `yaml:"https"`
 	} `yaml:"listen"`
-	SSLCertificate    string             `yaml:"ssl_certificate"`
-	SSLCertificateKey string             `yaml:"ssl_certificate_key"`
-	Domain            string             `yaml:"domain"`
-	Services          map[string]Service `yaml:"services"`
+	SSLCertificate      string              `yaml:"ssl_certificate"`
+	SSLCertificateKey   string              `yaml:"ssl_certificate_key"`
+	Domain              string              `yaml:"domain"`
+	Services            map[string]*Service `yaml:"services"`
+	servicesBySubdomain map[string]NamedService
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -41,6 +42,12 @@ func LoadConfig(path string) (*Config, error) {
 		if svc.Type() == ServiceTypeUnknown {
 			return nil, fmt.Errorf("service %s: one of serve_files, forwards_to, or api must be set", name)
 		}
+	}
+
+	// Initialize servicesBySubdomain for faster lookup
+	cfg.servicesBySubdomain = make(map[string]NamedService)
+	for name, svc := range cfg.Services {
+		cfg.servicesBySubdomain[svc.Subdomain] = NamedService{name: name, svc: svc}
 	}
 
 	return &cfg, nil
