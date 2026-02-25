@@ -71,13 +71,15 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	state.Mu.Lock()
 	state.LastUsed = time.Now()
-	if state.Timer != nil {
-		state.Timer.Stop()
-	}
-	if svc.Timeout > 0 {
-		state.Timer = time.AfterFunc(time.Duration(svc.Timeout)*time.Second, func() {
-			s.stopService(svcName)
-		})
+	if svc.Type() == ServiceTypeProxy {
+		if state.Timer != nil {
+			state.Timer.Stop()
+		}
+		if svc.Timeout > 0 {
+			state.Timer = time.AfterFunc(time.Duration(svc.Timeout)*time.Second, func() {
+				s.stopService(svcName)
+			})
+		}
 	}
 	state.Mu.Unlock()
 
@@ -97,7 +99,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		s.proxyRequest(w, r, svc.ForwardsTo)
 	default:
-		http.Error(w, "Service not configured", http.StatusInternalServerError)
+		panic("Service not configured") // configure happens on load
 	}
 }
 
