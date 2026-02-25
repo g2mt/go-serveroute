@@ -104,8 +104,8 @@ func (s *Server) findService(host string) (string, *Service) {
 	parts := strings.Split(host, ".")
 
 	var subdomain string
-	if len(parts) > 2 {
-		subdomain = parts[0]
+	if len(parts) >= 2 {
+		subdomain = parts[len(parts)-2]
 	} else {
 		subdomain = ""
 	}
