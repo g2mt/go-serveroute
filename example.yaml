@@ -1,0 +1,29 @@
+# run example with `./serveroute -config example.yaml`
+
+listen:
+  http: "127.0.0.1:8080" # required
+  # https: "127.0.0.1:8443" # optional
+ssl_certificate: /etc/ssl/localhost.crt # optional ssl public key
+ssl_certificate_key: /etc/ssl/localhost.key # optional ssl private key
+
+services:
+  main:
+    subdomain: "" # empty for zero subdomain
+    serve_files: ./public # relative to current working dir
+  py_http_server:
+    subdomain: "files" # service lies at files.[domain]
+    forwards_to: "http://localhost:8001" # redirects ex: "/abc" to "http://localhost:8001/abc"
+    start: ["/usr/bin/python", "-m", "http.server", "-d", "./public", "-b", "127.0.0.1", "8001"]
+      # starts the command above when first entering subdomain
+    # stop: [...] # optional, runs this command to stop the service
+    timeout: 30 # in seconds, if set (>0) then it will timeout if n seconds has passed AFTER the last packet sent to this subdomain
+
+    # NOTE: sets the following HTTP headers on proxy (similar to nginx)
+    # proxy_set_header Host $http_host;
+    # proxy_set_header X-Real-IP $remote_addr;
+    # proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    # proxy_set_header X-Forwarded-Proto $scheme;
+  api: # expose the serveroute api for /start, /stop and /status
+    subdomain: "api"
+    api: true
+
