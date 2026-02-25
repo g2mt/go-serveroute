@@ -14,10 +14,15 @@ type Config struct {
 	} `yaml:"listen"`
 	SSLCertificate    string             `yaml:"ssl_certificate"`
 	SSLCertificateKey string             `yaml:"ssl_certificate_key"`
+	Domain            string             `yaml:"domain"`
 	Services          map[string]Service `yaml:"services"`
 }
 
 func LoadConfig(path string) (*Config, error) {
+	if path == "" {
+		return nil, fmt.Errorf("config file is required")
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("reading config: %w", err)

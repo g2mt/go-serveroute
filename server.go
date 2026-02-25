@@ -90,13 +90,22 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) findService(host string) (string, *Service) {
 	host = strings.Split(host, ":")[0]
-	parts := strings.Split(host, ".")
 
 	var subdomain string
-	if len(parts) >= 2 {
-		subdomain = parts[len(parts)-2]
+	domain := s.Config.Domain
+
+	if domain != "" &&
+		len(host) >= (len(domain)+1) &&
+		strings.HasSuffix(host, domain) &&
+		host[len(host)-len(domain)-1] == '.' {
+		subdomain = host[:len(host)-len(domain)-1]
 	} else {
-		subdomain = ""
+		parts := strings.Split(host, ".")
+		if len(parts) >= 1 {
+			subdomain = parts[0]
+		} else {
+			subdomain = ""
+		}
 	}
 
 	for name, svc := range s.Config.Services {
@@ -171,7 +180,7 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request, target str
 
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *ServiceState) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
 	case "start":
