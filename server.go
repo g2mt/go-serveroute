@@ -200,6 +200,8 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"running": running,
 		})
+	case "list":
+		s.apiListServices(w)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -207,4 +209,29 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 			"error":  "Unknown API endpoint",
 		})
 	}
+}
+
+func (s *Server) apiListServices(w http.ResponseWriter) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	result := make(map[string]interface{})
+
+	for name, state := range s.Services {
+		state.Mu.Lock()
+		running := state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil
+		state.Mu.Unlock()
+
+		status := "stopped"
+		if running {
+			status = "started"
+		}
+
+		result[name] = map[string]interface{}{
+			"status":    status,
+			"subdomain": state.Service.Subdomain,
+		}
+	}
+
+	json.NewEncoder(w).Encode(result)
 }
