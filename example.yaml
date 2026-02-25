@@ -11,6 +11,8 @@ services:
   main:
     subdomain: "" # empty for zero subdomain
     serve_files: ./public # relative to current working dir
+    hidden: true # if true, then service will not appear in api list
+
   py_http_server:
     subdomain: "files" # service lies at files.[domain]
     forwards_to: "http://localhost:8001" # redirects ex: "/abc" to "http://localhost:8001/abc"

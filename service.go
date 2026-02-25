@@ -37,6 +37,7 @@ const (
 
 type Service struct {
 	Subdomain string `yaml:"subdomain"`
+	Hidden    bool   `yaml:"hidden"`
 
 	ServeFiles string `yaml:"serve_files"`
 	ForwardsTo string `yaml:"forwards_to"`

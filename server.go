@@ -216,18 +216,23 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 	result := make(map[string]interface{})
 
 	for name, state := range s.Services {
+		if state.Service.Hidden {
+			continue
+		}
+
 		running := state.IsRunning()
 		state.Mu.Lock()
-		defer state.Mu.Unlock()
-
 		status := "stopped"
 		if running {
 			status = "started"
 		}
 
+		subdomain := state.Service.Subdomain
+		state.Mu.Unlock()
+
 		result[name] = map[string]interface{}{
 			"status":    status,
-			"subdomain": state.Service.Subdomain,
+			"subdomain": subdomain,
 		}
 	}
 
