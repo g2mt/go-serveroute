@@ -1,13 +1,9 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -148,112 +144,4 @@ func (s *Server) getOrCreateState(name string, svc *service.Service) *service.Se
 	}
 	s.Services[name] = state
 	return state
-}
-
-func (s *Server) serveFiles(w http.ResponseWriter, r *http.Request, path string) {
-	fs := http.FileServer(http.Dir(path))
-	http.StripPrefix("/", fs).ServeHTTP(w, r)
-}
-
-func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request, target string) {
-	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
-		target = "http://" + target
-	}
-
-	url, err := url.Parse(target)
-	if err != nil {
-		http.Error(w, "Invalid target URL", http.StatusInternalServerError)
-		return
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(url)
-
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-
-		clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
-		if prior := req.Header.Get("X-Forwarded-For"); prior != "" {
-			clientIP = prior + ", " + clientIP
-		}
-		req.Header.Set("X-Forwarded-For", clientIP)
-		req.Header.Set("X-Real-IP", r.RemoteAddr)
-
-		if r.TLS != nil {
-			req.Header.Set("X-Forwarded-Proto", "https")
-		} else {
-			req.Header.Set("X-Forwarded-Proto", "http")
-		}
-	}
-
-	proxy.ServeHTTP(w, r)
-}
-
-func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *service.ServiceState) {
-	w.Header().Set("Content-Type", "application/json")
-
-	path := strings.TrimPrefix(r.URL.Path, "/")
-	switch path {
-	case "start":
-		if err := state.Start(); err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"status": "error",
-				"error":  err.Error(),
-			})
-			return
-		}
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "ok",
-		})
-	case "stop":
-		state.Stop()
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "ok",
-		})
-	case "status":
-		running := state.IsRunning()
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"running": running,
-		})
-	case "list":
-		s.apiListServices(w)
-	case "events":
-		s.apiEvents(w, r)
-	default:
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "error",
-			"error":  "Unknown API endpoint",
-		})
-	}
-}
-
-func (s *Server) apiListServices(w http.ResponseWriter) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	result := make(map[string]interface{})
-
-	for name, svc := range s.Config.Services {
-		if svc.Hidden {
-			continue
-		}
-
-		status := "stopped"
-		if state, ok := s.Services[name]; ok {
-			state.Mu.Lock()
-			defer state.Mu.Unlock()
-
-			if state.IsRunning() {
-				status = "started"
-			}
-		}
-
-		result[name] = map[string]interface{}{
-			"status":    status,
-			"subdomain": svc.Subdomain,
-		}
-	}
-
-	json.NewEncoder(w).Encode(result)
 }
