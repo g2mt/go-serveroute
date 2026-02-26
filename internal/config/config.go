@@ -37,10 +37,6 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("parsing config: %w", err)
 	}
 
-	if cfg.Listen.HTTP == "" {
-		return nil, fmt.Errorf("http listen address is required")
-	}
-
 	// Set default workdir to config file directory if not specified
 	configFileDir := filepath.Dir(path)
 	configFileDir, err = filepath.Abs(configFileDir)
