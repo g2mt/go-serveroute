@@ -10,47 +10,27 @@ const (
 )
 
 type Service struct {
-	subdomain string `yaml:"subdomain"`
-	hidden    bool   `yaml:"hidden"`
+	Subdomain string `yaml:"subdomain"`
+	Hidden    bool   `yaml:"hidden"`
 
-	serveFiles string `yaml:"serve_files"`
-	forwardsTo string `yaml:"forwards_to"`
-	api        bool   `yaml:"api"`
+	ServeFiles string `yaml:"serve_files"`
+	ForwardsTo string `yaml:"forwards_to"`
+	API        bool   `yaml:"api"`
 
-	start       []string `yaml:"start"`
-	stop        []string `yaml:"stop"`
-	timeout     int      `yaml:"timeout"`
-	killTimeout int      `yaml:"kill_timeout"`
-}
-
-func (s *Service) GetSubdomain() string {
-	return s.subdomain
-}
-
-func (s *Service) GetHidden() bool {
-	return s.hidden
-}
-
-func (s *Service) GetForwardsTo() string {
-	return s.forwardsTo
-}
-
-func (s *Service) GetServeFiles() string {
-	return s.serveFiles
-}
-
-func (s *Service) GetTimeout() int {
-	return s.timeout
+	Start       []string `yaml:"start"`
+	Stop        []string `yaml:"stop"`
+	Timeout     int      `yaml:"timeout"`
+	KillTimeout int      `yaml:"kill_timeout"`
 }
 
 func (s *Service) Type() ServiceType {
-	if s.serveFiles != "" {
+	if s.ServeFiles != "" {
 		return ServiceTypeFiles
 	}
-	if s.forwardsTo != "" {
+	if s.ForwardsTo != "" {
 		return ServiceTypeProxy
 	}
-	if s.api {
+	if s.API {
 		return ServiceTypeAPI
 	}
 
@@ -65,7 +45,7 @@ type NamedService struct {
 func MakeServicesBySubdomain(services map[string]*Service) map[string]NamedService {
 	servicesBySubdomain := make(map[string]NamedService)
 	for name, svc := range services {
-		servicesBySubdomain[svc.subdomain] = NamedService{Name: name, Svc: svc}
+		servicesBySubdomain[svc.Subdomain] = NamedService{Name: name, Svc: svc}
 	}
 	return servicesBySubdomain
 }

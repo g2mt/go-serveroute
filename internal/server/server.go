@@ -80,8 +80,8 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		if state.Timer != nil {
 			state.Timer.Stop()
 		}
-		if svc.GetTimeout() > 0 {
-			state.Timer = time.AfterFunc(time.Duration(svc.GetTimeout())*time.Second, func() {
+		if svc.Timeout > 0 {
+			state.Timer = time.AfterFunc(time.Duration(svc.Timeout)*time.Second, func() {
 				state.Stop()
 			})
 		}
@@ -92,13 +92,13 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	case service.ServiceTypeAPI:
 		s.handleAPI(w, r, state)
 	case service.ServiceTypeFiles:
-		s.serveFiles(w, r, svc.GetServeFiles())
+		s.serveFiles(w, r, svc.ServeFiles)
 	case service.ServiceTypeProxy:
 		if err := state.Start(); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
 			return
 		}
-		s.proxyRequest(w, r, svc.GetForwardsTo())
+		s.proxyRequest(w, r, svc.ForwardsTo)
 	default:
 		panic("Service not configured") // configure happens on load
 	}
@@ -234,8 +234,8 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 
 	result := make(map[string]interface{})
 
-	for name, service := range s.Config.Services {
-		if service.GetHidden() {
+	for name, svc := range s.Config.Services {
+		if svc.Hidden {
 			continue
 		}
 
@@ -251,7 +251,7 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 
 		result[name] = map[string]interface{}{
 			"status":    status,
-			"subdomain": service.GetSubdomain(),
+			"subdomain": svc.Subdomain,
 		}
 	}
 

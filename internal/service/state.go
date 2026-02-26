@@ -32,13 +32,13 @@ func (state *ServiceState) Start() error {
 	state.Mu.Lock()
 	defer state.Mu.Unlock()
 
-	if len(state.Service.start) == 0 {
+	if len(state.Service.Start) == 0 {
 		return nil
 	}
 
-	log.Printf("Starting service %s: %v", state.Name, state.Service.start)
+	log.Printf("Starting service %s: %v", state.Name, state.Service.Start)
 
-	cmd := exec.Command(state.Service.start[0], state.Service.start[1:]...)
+	cmd := exec.Command(state.Service.Start[0], state.Service.Start[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -62,7 +62,7 @@ func (state *ServiceState) Start() error {
 }
 
 func (state *ServiceState) waitForService() error {
-	target := state.Service.forwardsTo
+	target := state.Service.ForwardsTo
 	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
 		target = "http://" + target
 	}
@@ -96,10 +96,10 @@ func (state *ServiceState) Stop() {
 
 	log.Printf("Stopping service %s", state.Name)
 
-	if len(state.Service.stop) > 0 {
-		cmd := exec.Command(state.Service.stop[0], state.Service.stop[1:]...)
+	if len(state.Service.Stop) > 0 {
+		cmd := exec.Command(state.Service.Stop[0], state.Service.Stop[1:]...)
 		cmd.Run()
-	} else if state.Service.killTimeout > 0 {
+	} else if state.Service.KillTimeout > 0 {
 		// Try graceful shutdown first
 		if err := state.Cmd.Process.Signal(os.Interrupt); err != nil {
 			log.Printf("Failed to send SIGINT to service %s: %v", state.Name, err)
@@ -112,7 +112,7 @@ func (state *ServiceState) Stop() {
 			}()
 
 			select {
-			case <-time.After(time.Duration(state.Service.killTimeout) * time.Second):
+			case <-time.After(time.Duration(state.Service.KillTimeout) * time.Second):
 				log.Printf("Service %s shutdown timeout, killing process", state.Name)
 				state.Cmd.Process.Kill()
 				<-done // Wait for process to be killed
