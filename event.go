@@ -1,13 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
+
+	"github.com/gin-contrib/sse"
 )
 
 type Event struct {
-	Type    string
-	Service string
+	Type    string `json:"type"`
+	Service string `json:"service"`
 }
 
 type EventBus struct {
@@ -54,5 +57,47 @@ func (eb *EventBus) Unsubscribe(id int64) {
 	}
 }
 
-func (s *Server) apiEvents(w http.ResponseWriter) {
+func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", sse.ContentType)
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	id, ch := s.EventBus.Subscribe()
+	defer s.EventBus.Unsubscribe(id)
+
+	sse.Encode(w, sse.Event{
+		Event: "connected",
+		Data:  "connected",
+	})
+
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	// Listen for events and send them to client
+	for {
+		select {
+		case event := <-ch:
+			data, err := json.Marshal(event)
+			if err != nil {
+				return
+			}
+
+			if err := sse.Encode(w, sse.Event{
+				Event: "message",
+				Data:  string(data),
+			}); err != nil {
+				return
+			}
+
+			// Flush to ensure the event is sent immediately
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		case <-r.Context().Done():
+			// Client disconnected
+			return
+		}
+	}
 }

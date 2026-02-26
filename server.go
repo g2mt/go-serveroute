@@ -203,6 +203,8 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 		})
 	case "list":
 		s.apiListServices(w)
+	case "events"
+		s.apiEvents(w, r)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
