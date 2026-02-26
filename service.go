@@ -24,6 +24,7 @@ type ServiceState struct {
 	LastUsed time.Time
 	Timer    *time.Timer
 	Mu       sync.Mutex
+	EventBus *EventBus
 }
 
 type ServiceType int
@@ -63,7 +64,7 @@ func (s *Service) Type() ServiceType {
 	return ServiceTypeUnknown
 }
 
-func (state *ServiceState) ensureRunningProcess() error {
+func (state *ServiceState) start() error {
 	if state.IsRunning() {
 		return nil
 	}
@@ -91,6 +92,10 @@ func (state *ServiceState) ensureRunningProcess() error {
 		return err
 	}
 
+	state.EventBus.Publish(Event{
+		Type:    "start",
+		Service: state.Name,
+	})
 	return nil
 }
 
@@ -161,6 +166,11 @@ func (state *ServiceState) stop() {
 		state.Cmd.Wait()
 	}
 	state.Cmd = nil
+
+	state.EventBus.Publish(Event{
+		Type:    "stop",
+		Service: state.Name,
+	})
 }
 
 func (state *ServiceState) IsRunning() bool {

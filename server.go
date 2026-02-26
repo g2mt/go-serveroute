@@ -17,12 +17,14 @@ type Server struct {
 	Config   *Config
 	Services map[string]*ServiceState
 	Mu       sync.RWMutex
+	EventBus *EventBus
 }
 
 func NewServer(cfg *Config) *Server {
 	return &Server{
 		Config:   cfg,
 		Services: make(map[string]*ServiceState),
+		EventBus: NewEventBus(),
 	}
 }
 
@@ -78,7 +80,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	case ServiceTypeFiles:
 		s.serveFiles(w, r, svc.ServeFiles)
 	case ServiceTypeProxy:
-		if err := state.ensureRunningProcess(); err != nil {
+		if err := state.start(); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -126,8 +128,9 @@ func (s *Server) getOrCreateState(name string, svc *Service) *ServiceState {
 	}
 
 	state := &ServiceState{
-		Name:    name,
-		Service: svc,
+		Name:     name,
+		Service:  svc,
+		EventBus: s.EventBus,
 	}
 	s.Services[name] = state
 	return state
@@ -178,7 +181,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
 	case "start":
-		if err := state.ensureRunningProcess(); err != nil {
+		if err := state.start(); err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "error",
 				"error":  err.Error(),
