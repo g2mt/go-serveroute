@@ -4,13 +4,16 @@ import (
 	"flag"
 	"log"
 	"os"
+
+	"serveroute/internal/config"
+	"serveroute/internal/server"
 )
 
 func main() {
 	configPath := flag.String("config", "", "Path to config file")
 	flag.Parse()
 
-	cfg, err := LoadConfig(*configPath)
+	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -20,6 +23,6 @@ func main() {
 		log.Fatalf("Failed to change to workdir %s: %v", cfg.WorkDir, err)
 	}
 
-	server := NewServer(cfg)
+	server := server.NewServer(cfg)
 	server.Start()
 }

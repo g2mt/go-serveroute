@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"encoding/json"
@@ -12,21 +12,23 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-contrib/sse"
+	"serveroute/internal/config"
+	"serveroute/internal/event"
+	"serveroute/internal/service"
 )
 
 type Server struct {
-	Config   *Config // readonly
-	Services map[string]*ServiceState
+	Config   *config.Config // readonly
+	Services map[string]*service.ServiceState
 	Mu       sync.RWMutex
-	EventBus *EventBus
+	EventBus *event.EventBus
 }
 
-func NewServer(cfg *Config) *Server {
+func NewServer(cfg *config.Config) *Server {
 	return &Server{
 		Config:   cfg,
-		Services: make(map[string]*ServiceState),
-		EventBus: NewEventBus(),
+		Services: make(map[string]*service.ServiceState),
+		EventBus: event.NewEventBus(),
 	}
 }
 
@@ -64,25 +66,25 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	state.Mu.Lock()
 	state.LastUsed = time.Now()
-	if svc.Type() == ServiceTypeProxy {
+	if svc.Type() == config.ServiceTypeProxy {
 		if state.Timer != nil {
 			state.Timer.Stop()
 		}
 		if svc.Timeout > 0 {
 			state.Timer = time.AfterFunc(time.Duration(svc.Timeout)*time.Second, func() {
-				state.stop()
+				state.Stop()
 			})
 		}
 	}
 	state.Mu.Unlock()
 
 	switch svc.Type() {
-	case ServiceTypeAPI:
+	case config.ServiceTypeAPI:
 		s.handleAPI(w, r, state)
-	case ServiceTypeFiles:
+	case config.ServiceTypeFiles:
 		s.serveFiles(w, r, svc.ServeFiles)
-	case ServiceTypeProxy:
-		if err := state.start(); err != nil {
+	case config.ServiceTypeProxy:
+		if err := state.Start(); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -92,7 +94,7 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) findService(host string) (string, *Service) {
+func (s *Server) findService(host string) (string, *config.Service) {
 	host = strings.Split(host, ":")[0]
 
 	var subdomain string
@@ -114,14 +116,14 @@ func (s *Server) findService(host string) (string, *Service) {
 		}
 	}
 
-	if namedSvc, ok := s.Config.servicesBySubdomain[subdomain]; ok {
-		return namedSvc.name, namedSvc.svc
+	if namedSvc, ok := s.Config.ServicesBySubdomain[subdomain]; ok {
+		return namedSvc.Name, namedSvc.Svc
 	}
 
 	return "", nil
 }
 
-func (s *Server) getOrCreateState(name string, svc *Service) *ServiceState {
+func (s *Server) getOrCreateState(name string, svc *config.Service) *service.ServiceState {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
@@ -129,7 +131,7 @@ func (s *Server) getOrCreateState(name string, svc *Service) *ServiceState {
 		return state
 	}
 
-	state := &ServiceState{
+	state := &service.ServiceState{
 		Name:     name,
 		Service:  svc,
 		EventBus: s.EventBus,
@@ -177,13 +179,13 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request, target str
 	proxy.ServeHTTP(w, r)
 }
 
-func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *ServiceState) {
+func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *service.ServiceState) {
 	w.Header().Set("Content-Type", "application/json")
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
 	case "start":
-		if err := state.start(); err != nil {
+		if err := state.Start(); err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "error",
 				"error":  err.Error(),
@@ -194,7 +196,7 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *Servic
 			"status": "ok",
 		})
 	case "stop":
-		state.stop()
+		state.Stop()
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status": "ok",
 		})
@@ -243,49 +245,4 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 	}
 
 	json.NewEncoder(w).Encode(result)
-}
-
-func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", sse.ContentType)
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-
-	id, ch := s.EventBus.Subscribe()
-	defer s.EventBus.Unsubscribe(id)
-
-	sse.Encode(w, sse.Event{
-		Event: "connected",
-		Data:  "connected",
-	})
-
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
-	}
-
-	// Listen for events and send them to client
-	for {
-		select {
-		case event := <-ch:
-			data, err := json.Marshal(event)
-			if err != nil {
-				return
-			}
-
-			if err := sse.Encode(w, sse.Event{
-				Event: "message",
-				Data:  string(data),
-			}); err != nil {
-				return
-			}
-
-			// Flush to ensure the event is sent immediately
-			if flusher, ok := w.(http.Flusher); ok {
-				flusher.Flush()
-			}
-		case <-r.Context().Done():
-			// Client disconnected
-			return
-		}
-	}
 }

@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"fmt"
@@ -18,7 +18,49 @@ type Config struct {
 	Domain              string              `yaml:"domain"`
 	WorkDir             string              `yaml:"workdir"`
 	Services            map[string]*Service `yaml:"services"`
-	servicesBySubdomain map[string]NamedService
+	ServicesBySubdomain map[string]NamedService
+}
+
+type NamedService struct {
+	Name string
+	Svc  *Service
+}
+
+type ServiceType int
+
+const (
+	ServiceTypeUnknown ServiceType = iota
+	ServiceTypeFiles
+	ServiceTypeProxy
+	ServiceTypeAPI
+)
+
+type Service struct {
+	Subdomain string `yaml:"subdomain"`
+	Hidden    bool   `yaml:"hidden"`
+
+	ServeFiles string `yaml:"serve_files"`
+	ForwardsTo string `yaml:"forwards_to"`
+	API        bool   `yaml:"api"`
+
+	Start       []string `yaml:"start"`
+	Stop        []string `yaml:"stop"`
+	Timeout     int      `yaml:"timeout"`
+	KillTimeout int      `yaml:"kill_timeout"`
+}
+
+func (s *Service) Type() ServiceType {
+	if s.ServeFiles != "" {
+		return ServiceTypeFiles
+	}
+	if s.ForwardsTo != "" {
+		return ServiceTypeProxy
+	}
+	if s.API {
+		return ServiceTypeAPI
+	}
+
+	return ServiceTypeUnknown
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -63,9 +105,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	// Initialize servicesBySubdomain for faster lookup
-	cfg.servicesBySubdomain = make(map[string]NamedService)
+	cfg.ServicesBySubdomain = make(map[string]NamedService)
 	for name, svc := range cfg.Services {
-		cfg.servicesBySubdomain[svc.Subdomain] = NamedService{name: name, svc: svc}
+		cfg.ServicesBySubdomain[svc.Subdomain] = NamedService{Name: name, Svc: svc}
 	}
 
 	return &cfg, nil

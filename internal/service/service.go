@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"fmt"
@@ -10,61 +10,22 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
 
-type NamedService struct {
-	name string
-	svc  *Service
-}
+	"serveroute/internal/config"
+	"serveroute/internal/event"
+)
 
 type ServiceState struct {
 	Name     string
-	Service  *Service
+	Service  *config.Service
 	Cmd      *exec.Cmd
 	LastUsed time.Time
 	Timer    *time.Timer
 	Mu       sync.Mutex
-	EventBus *EventBus
+	EventBus *event.EventBus
 }
 
-type ServiceType int
-
-const (
-	ServiceTypeUnknown ServiceType = iota
-	ServiceTypeFiles
-	ServiceTypeProxy
-	ServiceTypeAPI
-)
-
-type Service struct {
-	Subdomain string `yaml:"subdomain"`
-	Hidden    bool   `yaml:"hidden"`
-
-	ServeFiles string `yaml:"serve_files"`
-	ForwardsTo string `yaml:"forwards_to"`
-	API        bool   `yaml:"api"`
-
-	Start       []string `yaml:"start"`
-	Stop        []string `yaml:"stop"`
-	Timeout     int      `yaml:"timeout"`
-	KillTimeout int      `yaml:"kill_timeout"`
-}
-
-func (s *Service) Type() ServiceType {
-	if s.ServeFiles != "" {
-		return ServiceTypeFiles
-	}
-	if s.ForwardsTo != "" {
-		return ServiceTypeProxy
-	}
-	if s.API {
-		return ServiceTypeAPI
-	}
-
-	return ServiceTypeUnknown
-}
-
-func (state *ServiceState) start() error {
+func (state *ServiceState) Start() error {
 	if state.IsRunning() {
 		return nil
 	}
@@ -92,7 +53,7 @@ func (state *ServiceState) start() error {
 		return err
 	}
 
-	state.EventBus.Publish(Event{
+	state.EventBus.Publish(event.Event{
 		Type:    "start",
 		Service: state.Name,
 	})
@@ -124,7 +85,7 @@ func (state *ServiceState) waitForService() error {
 	return fmt.Errorf("service did not start in time")
 }
 
-func (state *ServiceState) stop() {
+func (state *ServiceState) Stop() {
 	state.Mu.Lock()
 	defer state.Mu.Unlock()
 
@@ -167,7 +128,7 @@ func (state *ServiceState) stop() {
 	}
 	state.Cmd = nil
 
-	state.EventBus.Publish(Event{
+	state.EventBus.Publish(event.Event{
 		Type:    "stop",
 		Service: state.Name,
 	})
@@ -178,7 +139,7 @@ func (state *ServiceState) IsRunning() bool {
 	defer state.Mu.Unlock()
 
 	switch state.Service.Type() {
-	case ServiceTypeProxy:
+	case config.ServiceTypeProxy:
 		return state.Cmd != nil && state.Cmd.Process != nil && state.Cmd.ProcessState == nil
 	default:
 		return true
