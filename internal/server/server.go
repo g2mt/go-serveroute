@@ -228,13 +228,14 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 			continue
 		}
 
-		state := s.Services[name]
-		state.Mu.Lock()
-		defer state.Mu.Unlock()
-
 		status := "stopped"
-		if state.IsRunning() {
-			status = "started"
+		if state, ok := s.Services[name]; ok {
+			state.Mu.Lock()
+			defer state.Mu.Unlock()
+
+			if state.IsRunning() {
+				status = "started"
+			}
 		}
 
 		result[name] = map[string]interface{}{

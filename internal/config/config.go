@@ -21,48 +21,6 @@ type Config struct {
 	ServicesBySubdomain map[string]NamedService
 }
 
-type NamedService struct {
-	Name string
-	Svc  *Service
-}
-
-type ServiceType int
-
-const (
-	ServiceTypeUnknown ServiceType = iota
-	ServiceTypeFiles
-	ServiceTypeProxy
-	ServiceTypeAPI
-)
-
-type Service struct {
-	Subdomain string `yaml:"subdomain"`
-	Hidden    bool   `yaml:"hidden"`
-
-	ServeFiles string `yaml:"serve_files"`
-	ForwardsTo string `yaml:"forwards_to"`
-	API        bool   `yaml:"api"`
-
-	Start       []string `yaml:"start"`
-	Stop        []string `yaml:"stop"`
-	Timeout     int      `yaml:"timeout"`
-	KillTimeout int      `yaml:"kill_timeout"`
-}
-
-func (s *Service) Type() ServiceType {
-	if s.ServeFiles != "" {
-		return ServiceTypeFiles
-	}
-	if s.ForwardsTo != "" {
-		return ServiceTypeProxy
-	}
-	if s.API {
-		return ServiceTypeAPI
-	}
-
-	return ServiceTypeUnknown
-}
-
 func LoadConfig(path string) (*Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("config file is required")
