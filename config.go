@@ -41,12 +41,18 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	// Set default workdir to config file directory if not specified
+	configFileDir := filepath.Dir(path)
+	configFileDir, err = filepath.Abs(configFileDir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot find abs path for config dir")
+	}
+
 	if cfg.WorkDir == "" {
-		cfg.WorkDir = filepath.Dir(path)
+		cfg.WorkDir = configFileDir
 	} else {
 		// If workdir is relative, make it relative to config file path
 		if !filepath.IsAbs(cfg.WorkDir) {
-			cfg.WorkDir = filepath.Join(filepath.Dir(path), cfg.WorkDir)
+			cfg.WorkDir = filepath.Join(configFileDir, cfg.WorkDir)
 		}
 	}
 
