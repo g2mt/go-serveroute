@@ -15,6 +15,7 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	log.Printf("Changing directory to %s", cfg.WorkDir)
 	if err := os.Chdir(cfg.WorkDir); err != nil {
 		log.Fatalf("Failed to change to workdir %s: %v", cfg.WorkDir, err)
 	}
