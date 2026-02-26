@@ -6,6 +6,7 @@ listen:
   # https: "127.0.0.1:8443" # optional
 ssl_certificate: /etc/ssl/localhost.crt # optional ssl public key
 ssl_certificate_key: /etc/ssl/localhost.key # optional ssl private key
+workdir: . # optional, defaults to directory containing this config file
 
 services:
   main:

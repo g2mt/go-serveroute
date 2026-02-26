@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/goccy/go-yaml"
 )
@@ -15,6 +16,7 @@ type Config struct {
 	SSLCertificate      string              `yaml:"ssl_certificate"`
 	SSLCertificateKey   string              `yaml:"ssl_certificate_key"`
 	Domain              string              `yaml:"domain"`
+	WorkDir             string              `yaml:"workdir"`
 	Services            map[string]*Service `yaml:"services"`
 	servicesBySubdomain map[string]NamedService
 }
@@ -36,6 +38,16 @@ func LoadConfig(path string) (*Config, error) {
 
 	if cfg.Listen.HTTP == "" {
 		return nil, fmt.Errorf("http listen address is required")
+	}
+
+	// Set default workdir to config file directory if not specified
+	if cfg.WorkDir == "" {
+		cfg.WorkDir = filepath.Dir(path)
+	} else {
+		// If workdir is relative, make it relative to config file path
+		if !filepath.IsAbs(cfg.WorkDir) {
+			cfg.WorkDir = filepath.Join(filepath.Dir(path), cfg.WorkDir)
+		}
 	}
 
 	for name, svc := range cfg.Services {
