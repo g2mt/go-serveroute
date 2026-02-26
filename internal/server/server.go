@@ -65,12 +65,12 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	state.Mu.Lock()
 	state.LastUsed = time.Now()
-	if svc.Type() == config.ServiceTypeProxy {
+	if svc.Type() == service.ServiceTypeProxy {
 		if state.Timer != nil {
 			state.Timer.Stop()
 		}
-		if svc.Timeout > 0 {
-			state.Timer = time.AfterFunc(time.Duration(svc.Timeout)*time.Second, func() {
+		if svc.GetTimeout() > 0 {
+			state.Timer = time.AfterFunc(time.Duration(svc.GetTimeout())*time.Second, func() {
 				state.Stop()
 			})
 		}
@@ -78,22 +78,22 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	state.Mu.Unlock()
 
 	switch svc.Type() {
-	case config.ServiceTypeAPI:
+	case service.ServiceTypeAPI:
 		s.handleAPI(w, r, state)
-	case config.ServiceTypeFiles:
-		s.serveFiles(w, r, svc.ServeFiles)
-	case config.ServiceTypeProxy:
+	case service.ServiceTypeFiles:
+		s.serveFiles(w, r, svc.GetServeFiles())
+	case service.ServiceTypeProxy:
 		if err := state.Start(); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start service: %v", err), http.StatusInternalServerError)
 			return
 		}
-		s.proxyRequest(w, r, svc.ForwardsTo)
+		s.proxyRequest(w, r, svc.GetForwardsTo())
 	default:
 		panic("Service not configured") // configure happens on load
 	}
 }
 
-func (s *Server) findService(host string) (string, *config.Service) {
+func (s *Server) findService(host string) (string, *service.Service) {
 	host = strings.Split(host, ":")[0]
 
 	var subdomain string
@@ -122,7 +122,7 @@ func (s *Server) findService(host string) (string, *config.Service) {
 	return "", nil
 }
 
-func (s *Server) getOrCreateState(name string, svc *config.Service) *service.ServiceState {
+func (s *Server) getOrCreateState(name string, svc *service.Service) *service.ServiceState {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
@@ -224,7 +224,7 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 	result := make(map[string]interface{})
 
 	for name, service := range s.Config.Services {
-		if service.Hidden {
+		if service.GetHidden() {
 			continue
 		}
 
@@ -240,7 +240,7 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 
 		result[name] = map[string]interface{}{
 			"status":    status,
-			"subdomain": service.Subdomain,
+			"subdomain": service.GetSubdomain(),
 		}
 	}
 

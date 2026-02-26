@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"serveroute/internal/service"
 
 	"github.com/goccy/go-yaml"
 )
@@ -13,12 +14,12 @@ type Config struct {
 		HTTP  string `yaml:"http"`
 		HTTPS string `yaml:"https"`
 	} `yaml:"listen"`
-	SSLCertificate      string              `yaml:"ssl_certificate"`
-	SSLCertificateKey   string              `yaml:"ssl_certificate_key"`
-	Domain              string              `yaml:"domain"`
-	WorkDir             string              `yaml:"workdir"`
-	Services            map[string]*Service `yaml:"services"`
-	ServicesBySubdomain map[string]NamedService
+	SSLCertificate      string                      `yaml:"ssl_certificate"`
+	SSLCertificateKey   string                      `yaml:"ssl_certificate_key"`
+	Domain              string                      `yaml:"domain"`
+	WorkDir             string                      `yaml:"workdir"`
+	Services            map[string]*service.Service `yaml:"services"`
+	ServicesBySubdomain map[string]service.NamedService
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -57,16 +58,12 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	for name, svc := range cfg.Services {
-		if svc.Type() == ServiceTypeUnknown {
+		if svc.Type() == service.ServiceTypeUnknown {
 			return nil, fmt.Errorf("service %s: one of serve_files, forwards_to, or api must be set", name)
 		}
 	}
 
-	// Initialize servicesBySubdomain for faster lookup
-	cfg.ServicesBySubdomain = make(map[string]NamedService)
-	for name, svc := range cfg.Services {
-		cfg.ServicesBySubdomain[svc.Subdomain] = NamedService{Name: name, Svc: svc}
-	}
+	cfg.ServicesBySubdomain = service.MakeServicesBySubdomain(cfg.Services)
 
 	return &cfg, nil
 }
