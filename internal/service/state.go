@@ -15,13 +15,13 @@ import (
 )
 
 type ServiceState struct {
+	Mu       sync.Mutex
+	EventBus *event.EventBus
 	Name     string
 	Service  *Service
 	Cmd      *exec.Cmd
 	LastUsed time.Time
 	Timer    *time.Timer
-	Mu       sync.Mutex
-	EventBus *event.EventBus
 }
 
 func (state *ServiceState) Start() error {
@@ -52,10 +52,12 @@ func (state *ServiceState) Start() error {
 		return err
 	}
 
-	state.EventBus.Publish(event.Event{
-		Type:    "start",
-		Service: state.Name,
-	})
+	if state.EventBus != nil {
+		state.EventBus.Publish(event.Event{
+			Type:    "start",
+			Service: state.Name,
+		})
+	}
 	return nil
 }
 
@@ -127,10 +129,12 @@ func (state *ServiceState) Stop() {
 	}
 	state.Cmd = nil
 
-	state.EventBus.Publish(event.Event{
-		Type:    "stop",
-		Service: state.Name,
-	})
+	if state.EventBus != nil {
+		state.EventBus.Publish(event.Event{
+			Type:    "stop",
+			Service: state.Name,
+		})
+	}
 }
 
 func (state *ServiceState) IsRunning() bool {

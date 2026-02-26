@@ -32,7 +32,18 @@ func NewServer(cfg *config.Config) *Server {
 	}
 }
 
-func (s *Server) ServeForever() error {
+func (s *Server) cleanup() {
+	for _, state := range s.Services {
+		state.Mu.Lock()
+		defer state.Mu.Unlock()
+		state.EventBus = nil
+		state.Stop()
+	}
+}
+
+func (s *Server) ServeForever() {
+	defer s.cleanup()
+
 	go func() {
 		http.HandleFunc("/", s.handleRequest)
 		log.Printf("Starting HTTP server on %s", s.Config.Listen.HTTP)
