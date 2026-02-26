@@ -24,5 +24,5 @@ func main() {
 	}
 
 	server := server.NewServer(cfg)
-	server.Start()
+	server.ServeForever()
 }

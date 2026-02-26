@@ -32,10 +32,9 @@ func NewServer(cfg *config.Config) *Server {
 	}
 }
 
-func (s *Server) Start() error {
-	http.HandleFunc("/", s.handleRequest)
-
+func (s *Server) ServeForever() error {
 	go func() {
+		http.HandleFunc("/", s.handleRequest)
 		log.Printf("Starting HTTP server on %s", s.Config.Listen.HTTP)
 		if err := http.ListenAndServe(s.Config.Listen.HTTP, nil); err != nil {
 			log.Fatalf("HTTP server error: %v", err)
