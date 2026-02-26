@@ -40,9 +40,10 @@ func (s *Server) cleanup() {
 func (s *Server) ServeForever() {
 	defer s.cleanup()
 
+	http.HandleFunc("/", s.handleRequest)
+
 	if s.Config.Listen.HTTP != "" {
 		go func() {
-			http.HandleFunc("/", s.handleRequest)
 			log.Printf("Starting HTTP server on %s", s.Config.Listen.HTTP)
 			if err := http.ListenAndServe(s.Config.Listen.HTTP, nil); err != nil {
 				log.Fatalf("HTTP server error: %v", err)
