@@ -11,6 +11,7 @@ import (
 func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *service.ServiceState) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "*")
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	switch path {
