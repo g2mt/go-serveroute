@@ -8,6 +8,9 @@ ssl_certificate: /etc/ssl/localhost.crt # optional ssl public key
 ssl_certificate_key: /etc/ssl/localhost.key # optional ssl private key
 workdir: . # optional, defaults to directory containing this config file
 
+allowlist: [] # optional, if not empty, only allow these IPs/CIDRs (e.g., "1.2.3.4" or "10.0.0.0/24")
+blocklist: [] # optional, block these IPs/CIDRs (e.g., "192.168.1.100")
+
 services:
   main:
     subdomain: "" # empty for zero subdomain

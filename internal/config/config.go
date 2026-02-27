@@ -18,6 +18,8 @@ type Config struct {
 	SSLCertificateKey   string                      `yaml:"ssl_certificate_key"`
 	Domain              string                      `yaml:"domain"`
 	WorkDir             string                      `yaml:"workdir"`
+	Allowlist           []string                    `yaml:"allowlist"`
+	Blocklist           []string                    `yaml:"blocklist"`
 	Services            map[string]*service.Service `yaml:"services"`
 	ServicesBySubdomain map[string]service.NamedService
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -63,7 +64,62 @@ func (s *Server) ServeForever() {
 	select {}
 }
 
+func getClientIP(r *http.Request) string {
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		parts := strings.Split(xff, ",")
+		return strings.TrimSpace(parts[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func matchesIPOrCIDR(ip net.IP, pattern string) bool {
+	if strings.Contains(pattern, "/") {
+		_, ipNet, err := net.ParseCIDR(pattern)
+		if err != nil {
+			return false
+		}
+		return ipNet.Contains(ip)
+	}
+	patternIP := net.ParseIP(pattern)
+	if patternIP == nil {
+		return false
+	}
+	return ip.Equal(patternIP)
+}
+
+func (s *Server) isIPAllowed(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	for _, blocked := range s.Config.Blocklist {
+		if matchesIPOrCIDR(ip, blocked) {
+			return false
+		}
+	}
+	if len(s.Config.Allowlist) > 0 {
+		for _, allowed := range s.Config.Allowlist {
+			if matchesIPOrCIDR(ip, allowed) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
+	clientIP := getClientIP(r)
+	if !s.isIPAllowed(clientIP) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	namedSvc, ok := s.serviceByHostname(r.Host)
 	if !ok {
 		http.Error(w, "Service not found", http.StatusNotFound)
