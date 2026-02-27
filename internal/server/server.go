@@ -205,7 +205,6 @@ func (s *Server) serviceByHostname(host string) (service.NamedService, bool) {
 			subdomain = ""
 		}
 	}
-	println(host, subdomain)
 
 	if namedSvc, ok := s.Config.ServicesBySubdomain[subdomain]; ok {
 		return namedSvc, true
