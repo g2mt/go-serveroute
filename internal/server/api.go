@@ -49,8 +49,8 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request, state *servic
 }
 
 func (s *Server) apiListServices(w http.ResponseWriter) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
 	result := make(map[string]interface{})
 
@@ -61,9 +61,6 @@ func (s *Server) apiListServices(w http.ResponseWriter) {
 
 		status := "stopped"
 		if state, ok := s.Services[name]; ok {
-			state.Mu.Lock()
-			defer state.Mu.Unlock()
-
 			if state.IsRunning() {
 				status = "started"
 			}

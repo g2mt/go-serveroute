@@ -48,7 +48,7 @@ func (state *ServiceState) Start() error {
 
 	state.Cmd = cmd
 
-	if err := state.waitForService(); err != nil {
+	if err := state.unlockedWaitForService(); err != nil {
 		return err
 	}
 
@@ -61,7 +61,7 @@ func (state *ServiceState) Start() error {
 	return nil
 }
 
-func (state *ServiceState) waitForService() error {
+func (state *ServiceState) unlockedWaitForService() error {
 	target := state.Service.ForwardsTo
 	if !strings.HasPrefix(target, "http://") && !strings.HasPrefix(target, "https://") {
 		target = "http://" + target

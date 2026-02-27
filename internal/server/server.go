@@ -14,9 +14,9 @@ import (
 )
 
 type Server struct {
+	Mu       sync.Mutex
 	Config   *config.Config // readonly
 	Services map[string]*service.ServiceState
-	Mu       sync.RWMutex
 	EventBus *event.EventBus
 }
 
