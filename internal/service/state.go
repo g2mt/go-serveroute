@@ -15,7 +15,7 @@ import (
 )
 
 type ServiceState struct {
-	Mu       sync.Mutex
+	Mu       sync.Mutex // global mutex, all methods should lock unless prefixed by "unlocked"
 	EventBus *event.EventBus
 	Name     string
 	Service  *Service

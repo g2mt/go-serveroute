@@ -15,7 +15,7 @@ import (
 )
 
 type Server struct {
-	Mu       sync.Mutex
+	Mu       sync.Mutex     // global mutex, all methods should lock unless prefixed by "unlocked"
 	Config   *config.Config // readonly
 	Services map[string]*service.ServiceState
 	EventBus *event.EventBus
@@ -29,11 +29,7 @@ func NewServer(cfg *config.Config) *Server {
 	}
 }
 
-// StartAuto starts all services that have Autostart set to true
 func (s *Server) StartAuto() error {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
 	for name, svc := range s.Config.Services {
 		if svc.Autostart {
 			state := s.getOrCreateState(service.NamedService{Name: name, Svc: svc})
@@ -209,6 +205,7 @@ func (s *Server) serviceByHostname(host string) (service.NamedService, bool) {
 			subdomain = ""
 		}
 	}
+	println(host, subdomain)
 
 	if namedSvc, ok := s.Config.ServicesBySubdomain[subdomain]; ok {
 		return namedSvc, true
