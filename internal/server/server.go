@@ -64,14 +64,13 @@ func (s *Server) ServeForever() {
 }
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
-	host := r.Host
-	state := s.getOrCreateState(host)
-	if state == nil {
+	namedSvc, ok := s.serviceByHostname(r.Host)
+	if !ok {
 		http.Error(w, "Service not found", http.StatusNotFound)
 		return
 	}
-
-	svc := state.Service
+	state := s.getOrCreateState(namedSvc)
+	svc := namedSvc.Svc
 
 	state.Mu.Lock()
 	state.LastUsed = time.Now()
@@ -103,8 +102,21 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) serviceByName(name string) (service.NamedService, bool) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
-func (s *Server) getOrCreateState(host string) *service.ServiceState {
+	if svc, ok := s.Config.Services[name]; ok {
+		return service.NamedService{Name: name, Svc: svc}, true
+	} else {
+		return service.NamedService{}, false
+	}
+}
+
+func (s *Server) serviceByHostname(host string) (service.NamedService, bool) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
 	host = strings.Split(host, ":")[0]
 
 	var subdomain string
@@ -126,12 +138,14 @@ func (s *Server) getOrCreateState(host string) *service.ServiceState {
 		}
 	}
 
-	var namedSvc service.NamedService
-	var ok bool
-	if namedSvc, ok = s.Config.ServicesBySubdomain[subdomain]; !ok {
-		return nil
+	if namedSvc, ok := s.Config.ServicesBySubdomain[subdomain]; ok {
+		return namedSvc, true
+	} else {
+		return service.NamedService{}, false
 	}
+}
 
+func (s *Server) getOrCreateState(namedSvc service.NamedService) *service.ServiceState {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 

@@ -31,14 +31,15 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		state := s.getOrCreateState(reqBody.Service)
-		if state == nil {
+		namedSvc, ok := s.serviceByName(reqBody.Service)
+		if !ok {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"status": "error",
 				"error":  "unknown state",
 			})
 			return
 		}
+		state := s.getOrCreateState(namedSvc)
 
 		switch path {
 		case "start":
