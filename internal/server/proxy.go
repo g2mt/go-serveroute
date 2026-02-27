@@ -26,6 +26,7 @@ func (s *Server) proxyRequest(w http.ResponseWriter, r *http.Request, target str
 		originalDirector(req)
 
 		clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+		req.Header.Set("Host", "localhost")
 		if prior := req.Header.Get("X-Forwarded-For"); prior != "" {
 			clientIP = prior + ", " + clientIP
 		}
