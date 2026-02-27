@@ -1,0 +1,86 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+.status {
+    text-transform: capitalize;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85em;
+}
+
+.status.started {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status.stopped {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.actions {
+    text-align: center;
+}
+
+button {
+    padding: 6px 12px;
+    margin: 0 4px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.start-btn {
+    background-color: #28a745;
+    color: white;
+}
+
+.stop-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+button:hover:not(:disabled) {
+    opacity: 0.9;
+}

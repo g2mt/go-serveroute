@@ -5,8 +5,8 @@ import (
 )
 
 type Event struct {
-	Type    string `json:"type"`
-	Service string `json:"service"`
+	Type    string `json:"type"`    // either "start" or "stop"
+	Service string `json:"service"` // name of service
 }
 
 type EventBus struct {
