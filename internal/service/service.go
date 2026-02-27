@@ -17,6 +17,7 @@ type Service struct {
 	ForwardsTo string `yaml:"forwards_to"`
 	API        bool   `yaml:"api"`
 
+	Autostart   bool     `yaml:"autostart"`
 	Start       []string `yaml:"start"`
 	Stop        []string `yaml:"stop"`
 	Timeout     int      `yaml:"timeout"`

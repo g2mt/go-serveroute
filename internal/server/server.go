@@ -29,6 +29,22 @@ func NewServer(cfg *config.Config) *Server {
 	}
 }
 
+// StartAuto starts all services that have Autostart set to true
+func (s *Server) StartAuto() error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	for name, svc := range s.Config.Services {
+		if svc.Autostart {
+			state := s.getOrCreateState(service.NamedService{Name: name, Svc: svc})
+			if err := state.Start(); err != nil {
+				return fmt.Errorf("failed to start service %s: %w", name, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Server) cleanup() {
 	for _, state := range s.Services {
 		state.Mu.Lock()

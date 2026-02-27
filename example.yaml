@@ -20,6 +20,7 @@ services:
   py_http_server:
     subdomain: "files" # service lies at files.[domain]
     forwards_to: "http://localhost:8001" # redirects ex: "/abc" to "http://localhost:8001/abc"
+    autostart: true # automatically start this service when serveroute starts
     start: ["/usr/bin/python", "-m", "http.server", "-d", "./public", "-b", "127.0.0.1", "8001"]
       # starts the command above when first entering subdomain
     # stop: [...] # optional, runs this command to stop the service

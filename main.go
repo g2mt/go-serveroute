@@ -24,5 +24,10 @@ func main() {
 	}
 
 	server := server.NewServer(cfg)
+
+	if err := server.StartAuto(); err != nil {
+		log.Fatalf("Failed to autostart services: %v", err)
+	}
+
 	server.ServeForever()
 }
