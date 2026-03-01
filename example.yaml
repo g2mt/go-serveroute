@@ -11,6 +11,17 @@ workdir: . # optional, defaults to directory containing this config file
 allowlist: [] # optional, if not empty, only allow these IPs/CIDRs (e.g., "1.2.3.4" or "10.0.0.0/24")
 blocklist: [] # optional, block these IPs/CIDRs (e.g., "192.168.1.100")
 
+alt_hosts: # optional, if specified and client sends a matching Host header, then proxies requests to this other alt host
+  alt_host_1: # forwards request if the Host header is "alt_host_1"
+    ssh: # this is an ssh-type forwarding
+      host: "alt_host_ssh_1"
+      port: 22 # port of ssh connection
+      forwards_to: "127.0.0.1:80" # opens a tunnel which forwards remote's address (127.0.0.1:80),
+      # to a temporary UNIX socket file in local. equivalent to the command
+      #   ssh -L /tmp/xxxxx.socket:127.0.0.1:80 alt_host_ssh_1
+      # serveroute will then forward requests to the socket file, effectively acting as a proxy
+      reconnect: true # defaults to true. if true then the ssh process will automatically restart if it is closed
+
 services:
   main:
     subdomain: "" # empty for zero subdomain
