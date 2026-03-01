@@ -29,23 +29,25 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("config file is required")
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading config: %w", err)
-	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parsing config: %w", err)
-	}
-
-	// Set default workdir to config file directory if not specified
 	configFileDir := filepath.Dir(path)
-	configFileDir, err = filepath.Abs(configFileDir)
+	configFileDir, err := filepath.Abs(configFileDir)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find abs path for config dir")
 	}
 
+	// read config
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("opening config: %w", err)
+	}
+
+	var cfg Config
+	dec := yaml.NewDecoder(file, yaml.ReferenceDirs(configFileDir))
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, fmt.Errorf("parsing config: %w", err)
+	}
+
+	// Set default workdir to config file directory if not specified
 	if cfg.WorkDir == "" {
 		cfg.WorkDir = configFileDir
 	} else {
