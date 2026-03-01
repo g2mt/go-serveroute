@@ -156,8 +156,9 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Mu.Lock()
 	hostname := strings.Split(r.Host, ":")[0]
+
+	s.Mu.Lock()
 	if ah, ok := s.Config.AltHosts[hostname]; ok {
 		s.Mu.Unlock()
 		s.handleAltHost(w, r, hostname, ah)
