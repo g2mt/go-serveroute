@@ -9,15 +9,32 @@ import (
 	"sync"
 	"time"
 
+	"serveroute/internal/althost"
 	"serveroute/internal/config"
 	"serveroute/internal/event"
 	"serveroute/internal/service"
 )
 
+func extractSubdomain(host, parentDomain string) (string, bool) {
+	if parentDomain == "" {
+		return "", false
+	}
+	if len(host) >= (len(parentDomain)+1) &&
+		strings.HasSuffix(host, parentDomain) &&
+		host[len(host)-len(parentDomain)-1] == '.' {
+		return host[:len(host)-len(parentDomain)-1], true
+	} else if host == parentDomain {
+		return "", true
+	} else {
+		return "", false
+	}
+}
+
 type Server struct {
 	Mu       sync.Mutex     // global mutex, all methods should lock unless prefixed by "unlocked"
 	Config   *config.Config // readonly
 	Services map[string]*service.ServiceState
+	AltHosts map[string]althost.Tunnel // host -> tunnel
 	EventBus *event.EventBus
 }
 
@@ -25,6 +42,7 @@ func NewServer(cfg *config.Config) *Server {
 	return &Server{
 		Config:   cfg,
 		Services: make(map[string]*service.ServiceState),
+		AltHosts: make(map[string]althost.Tunnel),
 		EventBus: event.NewEventBus(),
 	}
 }
@@ -47,6 +65,12 @@ func (s *Server) cleanup() {
 		defer state.Mu.Unlock()
 		state.EventBus = nil
 		state.Stop()
+	}
+
+	// Close all SSH tunnels
+	for host, tunnel := range s.AltHosts {
+		log.Printf("Closing tunnel for %s", host)
+		tunnel.Close()
 	}
 }
 
@@ -132,7 +156,17 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	namedSvc, ok := s.serviceByHostname(r.Host)
+	hostname := strings.Split(r.Host, ":")[0]
+
+	s.Mu.Lock()
+	if ah, ok := s.Config.AltHosts[hostname]; ok {
+		s.Mu.Unlock()
+		s.handleAltHost(w, r, hostname, ah)
+		return
+	}
+	s.Mu.Unlock()
+
+	namedSvc, ok := s.serviceByHostname(hostname)
 	if !ok {
 		http.Error(w, "Service not found", http.StatusNotFound)
 		return
@@ -181,24 +215,17 @@ func (s *Server) serviceByName(name string) (service.NamedService, bool) {
 	}
 }
 
-func (s *Server) serviceByHostname(host string) (service.NamedService, bool) {
+func (s *Server) serviceByHostname(hostname string) (service.NamedService, bool) {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-
-	host = strings.Split(host, ":")[0]
 
 	var subdomain string
 	domain := s.Config.Domain
 
-	if domain != "" &&
-		len(host) >= (len(domain)+1) &&
-		strings.HasSuffix(host, domain) &&
-		host[len(host)-len(domain)-1] == '.' {
-		subdomain = host[:len(host)-len(domain)-1]
-	} else if host == domain {
-		subdomain = ""
+	if s, ok := extractSubdomain(hostname, domain); ok {
+		subdomain = s
 	} else {
-		parts := strings.Split(host, ".")
+		parts := strings.Split(hostname, ".")
 		if len(parts) >= 1 {
 			subdomain = parts[0]
 		} else {
@@ -228,4 +255,18 @@ func (s *Server) getOrCreateState(namedSvc service.NamedService) *service.Servic
 	}
 	s.Services[namedSvc.Name] = state
 	return state
+}
+
+func (s *Server) handleAltHost(w http.ResponseWriter, r *http.Request, ahName string, ah *althost.AltHost) {
+	tunnel := ah.GetTunnel()
+	if tunnel == nil {
+		http.Error(w, "Alt host configured but no tunnel settings found", http.StatusInternalServerError)
+		return
+	}
+	if err := tunnel.Open(); err != nil {
+		log.Printf("Failed to open SSH tunnel for %s: %v", ahName, err)
+		http.Error(w, "Failed to establish SSH tunnel", http.StatusBadGateway)
+		return
+	}
+	tunnel.Forward(w, r)
 }

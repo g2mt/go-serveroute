@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"serveroute/internal/althost"
 	"serveroute/internal/service"
 
 	"github.com/goccy/go-yaml"
@@ -22,6 +23,7 @@ type Config struct {
 	Blocklist           []string                    `yaml:"blocklist"`
 	Services            map[string]*service.Service `yaml:"services"`
 	ServicesBySubdomain map[string]service.NamedService
+	AltHosts            map[string]*althost.AltHost `yaml:"alt_hosts"`
 }
 
 func LoadConfig(path string) (*Config, error) {
