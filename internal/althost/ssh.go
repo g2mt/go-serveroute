@@ -35,6 +35,7 @@ func (t *SSHTunnel) shouldReconnect() bool {
 	if t.Reconnect != nil {
 		shouldReconnect = *t.Reconnect
 	}
+	return shouldReconnect
 }
 
 func (t *SSHTunnel) Open() error {
@@ -57,20 +58,16 @@ func (t *SSHTunnel) Open() error {
 	t.socketPath = socketFile.Name()
 	socketFile.Close()
 
-	// Parse forwards_to (format: host:port)
-	remoteParts := strings.Split(t.ForwardsTo, ":")
-	if len(remoteParts) != 2 {
-		return fmt.Errorf("invalid forwards_to format: %s, expected host:port", t.ForwardsTo)
-	}
-	remoteHost := remoteParts[0]
-	remotePort := remoteParts[1]
-
 	// Build SSH command: ssh -N -L /path/to/socket:remote_host:remote_port ssh_host -p ssh_port
+	remoteUrl, err := url.Parse(t.ForwardsTo)
+	if err != nil {
+		return fmt.Errorf("parsing target URL: %w", err)
+	}
 	t.cmd = exec.Command("ssh",
 		"-N",
 		"-o", "ServerAliveInterval=60",
 		"-o", "ServerAliveCountMax=3",
-		"-L", fmt.Sprintf("%s:%s:%s", t.socketPath, remoteHost, remotePort),
+		"-L", fmt.Sprintf("%s:%s", t.socketPath, remoteUrl.Host),
 		t.Host,
 		"-p", fmt.Sprintf("%d", t.Port),
 	)
@@ -96,7 +93,7 @@ func (t *SSHTunnel) Open() error {
 
 	// Create reverse proxy
 	director := func(req *http.Request) {
-		req.URL.Scheme = "http"
+		req.URL.Scheme = remoteUrl.Scheme
 		req.URL.Host = t.ForwardsTo
 		req.Host = t.ForwardsTo
 	}
@@ -163,12 +160,12 @@ func (t *SSHTunnel) Close() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.cmd != nil && t.cmd.Process != nil {
-		t.cmd.Process.Kill()
+	if t.done != nil {
+		t.done <- struct{}{} // stop the reconnection goroutine
 	}
 
-	if t.done != nil {
-		t.done <- struct{}{}
+	if t.cmd != nil && t.cmd.Process != nil {
+		t.cmd.Process.Kill()
 	}
 
 	if t.socketPath != "" {
