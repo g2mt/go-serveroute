@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -22,24 +23,18 @@ type SSHTunnel struct {
 	ForwardsTo string `yaml:"forwards_to"`
 	Reconnect  *bool  `yaml:"reconnect"` // defaults to true if nil
 
-	// Runtime fields (not exported)
 	mu         sync.Mutex
 	socketPath string
 	cmd        *exec.Cmd
-	running    bool
+	done       chan struct{}
 	proxy      *httputil.ReverseProxy
-	workDir    string
-}
-
-func (t *SSHTunnel) SetWorkDir(dir string) {
-	t.workDir = dir
 }
 
 func (t *SSHTunnel) Open() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.running {
+	if t.cmd != nil {
 		return nil
 	}
 
@@ -47,9 +42,13 @@ func (t *SSHTunnel) Open() error {
 		t.Port = 22
 	}
 
-	// Create temp socket file in workdir
-	socketFile := fmt.Sprintf("tunnel_%s_%d.sock", sanitizeHost(t.Host), time.Now().UnixNano())
-	t.socketPath = filepath.Join(t.workDir, socketFile)
+	// Create temp socket file
+	socketFile, err := os.CreateTemp("", "")
+	if err != nil {
+		return err
+	}
+	t.socketPath = socketFile.Name()
+	socketFile.Close()
 
 	// Parse forwards_to (format: host:port)
 	remoteParts := strings.Split(t.ForwardsTo, ":")
@@ -73,8 +72,6 @@ func (t *SSHTunnel) Open() error {
 	if err := t.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start SSH tunnel: %w", err)
 	}
-
-	t.running = true
 
 	// Wait for socket to be created (with timeout)
 	if err := t.waitForSocket(10 * time.Second); err != nil {
@@ -107,6 +104,7 @@ func (t *SSHTunnel) Open() error {
 		shouldReconnect = *t.Reconnect
 	}
 	if shouldReconnect {
+		t.done = make(chan struct{})
 		go t.monitorAndReconnect()
 	}
 
@@ -125,47 +123,55 @@ func (t *SSHTunnel) waitForSocket(timeout time.Duration) error {
 }
 
 func (t *SSHTunnel) monitorAndReconnect() {
-	err := t.cmd.Wait()
+	cmdFinished := make(chan struct{})
 
-	t.mu.Lock()
-	wasRunning := t.running
-	t.running = false
-	t.mu.Unlock()
+	go func() {
+		t.mu.Lock()
+		cmd := t.cmd
+		t.mu.Unlock()
 
-	if wasRunning {
-		if err != nil {
-			log.Printf("SSH tunnel to %s exited: %v", t.Host, err)
-		}
-		
-		// Check if we should reconnect
-		shouldReconnect := true
-		if t.Reconnect != nil {
-			shouldReconnect = *t.Reconnect
-		}
-		
-		if shouldReconnect {
-			log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
-			time.Sleep(1 * time.Second) // Brief pause before reconnect
-			if err := t.Open(); err != nil {
-				log.Printf("Failed to reconnect SSH tunnel to %s: %v", t.Host, err)
+		cmd.Wait() // should be safe so long as cmd is not mutated
+		cmdFinished <- struct{}{}
+	}()
+
+	go func() {
+		t.mu.Lock()
+		done := t.done
+		defer t.mu.Unlock()
+
+		select {
+		case _ = <-cmdFinished:
+			log.Printf("SSH tunnel to %s exited", t.Host)
+
+			// Check if we should reconnect
+			shouldReconnect := true
+			if t.Reconnect != nil {
+				shouldReconnect = *t.Reconnect
 			}
+
+			if shouldReconnect {
+				log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
+				time.Sleep(1 * time.Second) // Brief pause before reconnect
+				if err := t.Open(); err != nil {
+					log.Printf("Failed to reconnect SSH tunnel to %s: %v", t.Host, err)
+				}
+			}
+
+		case _ = <-done:
 		}
-	}
+	}()
 }
 
 func (t *SSHTunnel) Close() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if !t.running {
-		return
-	}
-
-	t.running = false
-
 	if t.cmd != nil && t.cmd.Process != nil {
 		t.cmd.Process.Kill()
-		t.cmd.Wait()
+	}
+
+	if t.done != nil {
+		t.done <- struct{}{}
 	}
 
 	if t.socketPath != "" {
@@ -175,19 +181,7 @@ func (t *SSHTunnel) Close() {
 
 func (t *SSHTunnel) Forward(w http.ResponseWriter, r *http.Request) {
 	t.mu.Lock()
-	proxy := t.proxy
-	running := t.running
-	t.mu.Unlock()
+	defer t.mu.Unlock()
 
-	if !running {
-		http.Error(w, "SSH tunnel not running", http.StatusServiceUnavailable)
-		return
-	}
-
-	proxy.ServeHTTP(w, r)
-}
-
-func sanitizeHost(host string) string {
-	// Replace characters that might be problematic in filenames
-	return strings.ReplaceAll(strings.ReplaceAll(host, ".", "_"), ":", "_")
+	t.proxy.ServeHTTP(w, r)
 }
