@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"sync"
 	"time"
 )
@@ -43,12 +44,11 @@ func (t *SSHTunnel) Open() error {
 	}
 
 	// Create temp socket file
-	socketFile, err := os.CreateTemp("", "serveroute_tun.*.socket")
+	socketDir, err := os.MkdirTemp("", "serveroute_tun.*")
 	if err != nil {
 		return err
 	}
-	t.socketPath = socketFile.Name()
-	socketFile.Close()
+	t.socketPath = path.Join(socketDir, "socket")
 
 	// Build SSH command
 	remoteUrl, err := url.Parse(t.ForwardsTo)
@@ -160,7 +160,7 @@ func (t *SSHTunnel) Close() {
 	}
 
 	if t.socketPath != "" {
-		os.Remove(t.socketPath)
+		os.RemoveAll(t.socketPath)
 	}
 }
 
