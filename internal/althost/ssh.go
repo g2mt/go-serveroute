@@ -43,7 +43,7 @@ func (t *SSHTunnel) Open() error {
 	}
 
 	// Create temp socket file
-	socketFile, err := os.CreateTemp("", "")
+	socketFile, err := os.CreateTemp("", "serveroute_tun.*.socket")
 	if err != nil {
 		return err
 	}
