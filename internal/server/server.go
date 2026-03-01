@@ -156,11 +156,14 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.Mu.Lock()
 	hostname := strings.Split(r.Host, ":")[0]
 	if ah, ok := s.Config.AltHosts[hostname]; ok {
-		s.handleAltHost(w, r, ah)
+		s.Mu.Unlock()
+		s.handleAltHost(w, r, hostname, ah)
 		return
 	}
+	s.Mu.Unlock()
 
 	namedSvc, ok := s.serviceByHostname(hostname)
 	if !ok {
@@ -253,28 +256,16 @@ func (s *Server) getOrCreateState(namedSvc service.NamedService) *service.Servic
 	return state
 }
 
-func (s *Server) handleAltHost(w http.ResponseWriter, r *http.Request, ah *althost.AltHost) {
-	if ah.SSH == nil {
-		http.Error(w, "Alt host configured but no SSH settings found", http.StatusInternalServerError)
+func (s *Server) handleAltHost(w http.ResponseWriter, r *http.Request, ahName string, ah *althost.AltHost) {
+	tunnel := ah.GetTunnel()
+	if tunnel == nil {
+		http.Error(w, "Alt host configured but no tunnel settings found", http.StatusInternalServerError)
 		return
 	}
-
-	host := strings.Split(r.Host, ":")[0]
-
-	s.Mu.Lock()
-	tunnel, exists := s.AltHosts[host]
-	if !exists {
-		ah.SSH.SetWorkDir(s.Config.WorkDir)
-		s.AltHosts[host] = ah.SSH
-		tunnel = ah.SSH
-	}
-	s.Mu.Unlock()
-
 	if err := tunnel.Open(); err != nil {
-		log.Printf("Failed to open SSH tunnel for %s: %v", host, err)
+		log.Printf("Failed to open SSH tunnel for %s: %v", ahName, err)
 		http.Error(w, "Failed to establish SSH tunnel", http.StatusBadGateway)
 		return
 	}
-
 	tunnel.Forward(w, r)
 }
