@@ -16,7 +16,6 @@ import (
 
 type SSHTunnel struct {
 	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
 	ForwardsTo string `yaml:"forwards_to"`
 	Reconnect  *bool  `yaml:"reconnect"` // defaults to true if nil
 
@@ -43,10 +42,6 @@ func (t *SSHTunnel) Open() error {
 		return nil
 	}
 
-	if t.Port == 0 {
-		t.Port = 22
-	}
-
 	// Create temp socket file
 	socketFile, err := os.CreateTemp("", "serveroute_tun.*.socket")
 	if err != nil {
@@ -55,7 +50,7 @@ func (t *SSHTunnel) Open() error {
 	t.socketPath = socketFile.Name()
 	socketFile.Close()
 
-	// Build SSH command: ssh -N -L /path/to/socket:remote_host:remote_port ssh_host -p ssh_port
+	// Build SSH command
 	remoteUrl, err := url.Parse(t.ForwardsTo)
 	if err != nil {
 		return fmt.Errorf("parsing target URL: %w", err)
@@ -66,7 +61,6 @@ func (t *SSHTunnel) Open() error {
 		"-o", "ServerAliveCountMax=3",
 		"-L", fmt.Sprintf("%s:%s", t.socketPath, remoteUrl.Host),
 		t.Host,
-		"-p", fmt.Sprintf("%d", t.Port),
 	)
 
 	// Start SSH process
