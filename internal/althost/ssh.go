@@ -30,6 +30,13 @@ type SSHTunnel struct {
 	proxy      *httputil.ReverseProxy
 }
 
+func (t *SSHTunnel) shouldReconnect() bool {
+	shouldReconnect := true
+	if t.Reconnect != nil {
+		shouldReconnect = *t.Reconnect
+	}
+}
+
 func (t *SSHTunnel) Open() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -99,11 +106,7 @@ func (t *SSHTunnel) Open() error {
 	}
 
 	// Handle reconnection in background if enabled (default true)
-	shouldReconnect := true
-	if t.Reconnect != nil {
-		shouldReconnect = *t.Reconnect
-	}
-	if shouldReconnect {
+	if t.shouldReconnect() {
 		t.done = make(chan struct{})
 		go t.monitorAndReconnect()
 	}
@@ -143,13 +146,7 @@ func (t *SSHTunnel) monitorAndReconnect() {
 		case _ = <-cmdFinished:
 			log.Printf("SSH tunnel to %s exited", t.Host)
 
-			// Check if we should reconnect
-			shouldReconnect := true
-			if t.Reconnect != nil {
-				shouldReconnect = *t.Reconnect
-			}
-
-			if shouldReconnect {
+			if t.shouldReconnect() {
 				log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
 				time.Sleep(1 * time.Second) // Brief pause before reconnect
 				if err := t.Open(); err != nil {
