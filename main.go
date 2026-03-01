@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"serveroute/internal/config"
 	"serveroute/internal/server"
@@ -29,5 +32,11 @@ func main() {
 		log.Fatalf("Failed to autostart services: %v", err)
 	}
 
-	server.ServeForever()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go server.ServeForever()
+
+	<-ctx.Done()
+	server.Close()
 }

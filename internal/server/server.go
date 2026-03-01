@@ -34,7 +34,6 @@ type Server struct {
 	Mu       sync.Mutex     // global mutex, all methods should lock unless prefixed by "unlocked"
 	Config   *config.Config // readonly
 	Services map[string]*service.ServiceState
-	AltHosts map[string]althost.Tunnel // host -> tunnel
 	EventBus *event.EventBus
 }
 
@@ -42,7 +41,6 @@ func NewServer(cfg *config.Config) *Server {
 	return &Server{
 		Config:   cfg,
 		Services: make(map[string]*service.ServiceState),
-		AltHosts: make(map[string]althost.Tunnel),
 		EventBus: event.NewEventBus(),
 	}
 }
@@ -59,7 +57,11 @@ func (s *Server) StartAuto() error {
 	return nil
 }
 
-func (s *Server) cleanup() {
+func (s *Server) Close() {
+	log.Printf("Shutting down server...")
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
 	for _, state := range s.Services {
 		state.Mu.Lock()
 		defer state.Mu.Unlock()
@@ -68,15 +70,16 @@ func (s *Server) cleanup() {
 	}
 
 	// Close all SSH tunnels
-	for host, tunnel := range s.AltHosts {
+	for host, ah := range s.Config.AltHosts {
 		log.Printf("Closing tunnel for %s", host)
-		tunnel.Close()
+		tunnel := ah.GetTunnel()
+		if tunnel != nil {
+			tunnel.Close()
+		}
 	}
 }
 
 func (s *Server) ServeForever() {
-	defer s.cleanup()
-
 	http.HandleFunc("/", s.handleRequest)
 
 	if s.Config.Listen.HTTP != "" {
