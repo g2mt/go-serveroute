@@ -14,6 +14,21 @@ import (
 	"serveroute/internal/service"
 )
 
+func extractSubdomain(host, parentDomain string) (string, bool) {
+	if parentDomain == "" {
+		return "", false
+	}
+	if len(host) >= (len(parentDomain)+1) &&
+		strings.HasSuffix(host, parentDomain) &&
+		host[len(host)-len(parentDomain)-1] == '.' {
+		return host[:len(host)-len(parentDomain)-1], true
+	} else if host == parentDomain {
+		return "", true
+	} else {
+		return "", false
+	}
+}
+
 type Server struct {
 	Mu       sync.Mutex     // global mutex, all methods should lock unless prefixed by "unlocked"
 	Config   *config.Config // readonly
@@ -190,13 +205,8 @@ func (s *Server) serviceByHostname(host string) (service.NamedService, bool) {
 	var subdomain string
 	domain := s.Config.Domain
 
-	if domain != "" &&
-		len(host) >= (len(domain)+1) &&
-		strings.HasSuffix(host, domain) &&
-		host[len(host)-len(domain)-1] == '.' {
-		subdomain = host[:len(host)-len(domain)-1]
-	} else if host == domain {
-		subdomain = ""
+	if s, ok := extractSubdomain(host, domain); ok {
+		subdomain = s
 	} else {
 		parts := strings.Split(host, ".")
 		if len(parts) >= 1 {
