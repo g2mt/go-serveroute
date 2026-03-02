@@ -2,6 +2,7 @@ package althost
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -16,9 +17,10 @@ import (
 )
 
 type SSHTunnel struct {
-	Host       string `yaml:"host"`
-	ForwardsTo string `yaml:"forwards_to"`
-	Reconnect  *bool  `yaml:"reconnect"` // defaults to true if nil
+	Host                  string `yaml:"host"`
+	ForwardsTo            string `yaml:"forwards_to"`
+	Reconnect             *bool  `yaml:"reconnect"` // defaults to true if nil
+	InsecureSkipVerifyTLS bool   `yaml:"insecure_skip_verify_tls"`
 
 	mu         sync.Mutex
 	stopped    bool
@@ -87,6 +89,9 @@ func (t *SSHTunnel) Open() error {
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", t.socketPath)
+		},
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: t.InsecureSkipVerifyTLS,
 		},
 	}
 

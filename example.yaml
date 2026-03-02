@@ -21,6 +21,7 @@ alt_hosts: # optional, if specified and client sends a matching Host header, the
       #   ssh -N -L /tmp/xxxxx.socket:127.0.0.1:80 alt_host_ssh_1
       # serveroute will then forward requests to the socket file, effectively acting as a proxy
       reconnect: true # defaults to true. if true then the ssh process will automatically restart if it is closed
+      insecure_skip_verify_tls: false # if true then the tls proxy will skip certifcate verification
 
 services:
   main:
