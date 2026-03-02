@@ -86,9 +86,9 @@ func (s *Server) Close() {
 
 	// Close all SSH tunnels
 	for host, ah := range s.Config.AltHosts {
-		log.Printf("Closing tunnel for %s", host)
 		tunnel := ah.GetTunnel()
 		if tunnel != nil {
+			log.Printf("Closing tunnel for %s", host)
 			tunnel.Close()
 		}
 	}
