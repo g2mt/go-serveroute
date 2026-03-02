@@ -48,6 +48,8 @@ func (s *Server) apiEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			// Client disconnected
 			return
+		default:
+			return
 		}
 	}
 }

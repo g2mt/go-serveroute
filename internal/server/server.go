@@ -62,12 +62,14 @@ func (s *Server) StartAuto() error {
 	return nil
 }
 
-func (s *Server) Close() {
+func (s *Server) Shutdown() {
 	log.Printf("Shutting down server...")
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
-	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 10*time.Second)
+	s.EventBus.Close()
+
+	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 1*time.Second)
 	defer shutdownRelease()
 
 	if s.httpServer != nil {
@@ -79,8 +81,8 @@ func (s *Server) Close() {
 
 	for _, state := range s.Services {
 		state.Mu.Lock()
-		defer state.Mu.Unlock()
 		state.EventBus = nil
+		state.Mu.Unlock()
 		state.Stop()
 	}
 

@@ -21,6 +21,15 @@ func NewEventBus() *EventBus {
 	}
 }
 
+func (eb *EventBus) Close() {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	for _, ch := range eb.events {
+		close(ch)
+	}
+	eb.events = nil
+}
+
 func (eb *EventBus) Publish(e Event) {
 	eb.mu.RLock()
 	defer eb.mu.RUnlock()

@@ -38,6 +38,6 @@ func main() {
 	go server.ServeForever()
 
 	<-ctx.Done()
-	server.Close()
+	server.Shutdown()
 	os.Exit(0)
 }

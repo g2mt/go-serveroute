@@ -108,7 +108,24 @@ func (t *SSHTunnel) Open() error {
 
 	// Handle reconnection in background if enabled (default true)
 	if t.unlockedShouldReconnect() {
-		go t.monitorAndReconnect()
+		context.AfterFunc(t.ctx, func() {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+
+			t.cmd.Process.Kill()
+			log.Printf("SSH tunnel to %s exited", t.Host)
+
+			if t.unlockedShouldReconnect() {
+				// spawn coroutine to prevent recursive loop
+				go func() {
+					time.Sleep(1 * time.Second) // Brief pause before reconnect
+					log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
+					if err := t.Open(); err != nil {
+						log.Printf("Failed to reconnect SSH tunnel to %s: %v", t.Host, err)
+					}
+				}()
+			}
+		})
 	}
 
 	return nil
@@ -123,28 +140,6 @@ func (t *SSHTunnel) waitForSocket(timeout time.Duration) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 	return fmt.Errorf("timeout waiting for socket %s", t.socketPath)
-}
-
-func (t *SSHTunnel) monitorAndReconnect() {
-	t.mu.Lock()
-	ctx := t.ctx
-	t.mu.Unlock()
-
-	select {
-	case _ = <-ctx.Done():
-		t.mu.Lock()
-		defer t.mu.Unlock()
-
-		log.Printf("SSH tunnel to %s exited", t.Host)
-
-		if t.unlockedShouldReconnect() {
-			log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
-			time.Sleep(1 * time.Second) // Brief pause before reconnect
-			if err := t.Open(); err != nil {
-				log.Printf("Failed to reconnect SSH tunnel to %s: %v", t.Host, err)
-			}
-		}
-	}
 }
 
 func (t *SSHTunnel) Close() {
