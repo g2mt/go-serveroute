@@ -39,4 +39,5 @@ func main() {
 
 	<-ctx.Done()
 	server.Close()
+	os.Exit(0)
 }
