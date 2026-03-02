@@ -17,13 +17,17 @@ import (
 	"serveroute/internal/service"
 )
 
+func isSubdomainOf(host, parentDomain string) bool {
+	return len(host) >= (len(parentDomain)+1) &&
+		strings.HasSuffix(host, parentDomain) &&
+		host[len(host)-len(parentDomain)-1] == '.'
+}
+
 func extractSubdomain(host, parentDomain string) (string, bool) {
 	if parentDomain == "" {
 		return "", false
 	}
-	if len(host) >= (len(parentDomain)+1) &&
-		strings.HasSuffix(host, parentDomain) &&
-		host[len(host)-len(parentDomain)-1] == '.' {
+	if isSubdomainOf(host, parentDomain) {
 		return host[:len(host)-len(parentDomain)-1], true
 	} else if host == parentDomain {
 		return "", true
@@ -183,18 +187,24 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hostname := strings.Split(r.Host, ":")[0]
+	subdomain, isSelfDomain := extractSubdomain(hostname, s.Config.Domain)
 
-	if s.Config.Domain != hostname {
+	if !isSelfDomain {
 		s.Mu.Lock()
-		if ah, ok := s.Config.AltHosts[hostname]; ok {
-			s.Mu.Unlock()
-			s.handleAltHost(w, r, hostname, ah)
-			return
+		for aHostname, ah := range s.Config.AltHosts {
+			if aHostname == s.Config.Domain {
+				continue
+			}
+			if hostname == aHostname || isSubdomainOf(hostname, aHostname) {
+				s.Mu.Unlock()
+				s.handleAltHost(w, r, hostname, ah)
+				return
+			}
 		}
 		s.Mu.Unlock()
 	}
 
-	namedSvc, ok := s.serviceByHostname(hostname)
+	namedSvc, ok := s.serviceBySubdomain(subdomain)
 	if !ok {
 		http.Error(w, "Service not found", http.StatusNotFound)
 		return
@@ -243,23 +253,9 @@ func (s *Server) serviceByName(name string) (service.NamedService, bool) {
 	}
 }
 
-func (s *Server) serviceByHostname(hostname string) (service.NamedService, bool) {
+func (s *Server) serviceBySubdomain(subdomain string) (service.NamedService, bool) {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
-
-	var subdomain string
-	domain := s.Config.Domain
-
-	if s, ok := extractSubdomain(hostname, domain); ok {
-		subdomain = s
-	} else {
-		parts := strings.Split(hostname, ".")
-		if len(parts) >= 1 {
-			subdomain = parts[0]
-		} else {
-			subdomain = ""
-		}
-	}
 
 	if namedSvc, ok := s.Config.ServicesBySubdomain[subdomain]; ok {
 		return namedSvc, true
