@@ -21,13 +21,18 @@ type SSHTunnel struct {
 	Reconnect  *bool  `yaml:"reconnect"` // defaults to true if nil
 
 	mu         sync.Mutex
+	stopped    bool
 	socketPath string
-	cmd        *exec.Cmd
-	done       chan struct{}
 	proxy      *httputil.ReverseProxy
+	cmd        *exec.Cmd
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
-func (t *SSHTunnel) shouldReconnect() bool {
+func (t *SSHTunnel) unlockedShouldReconnect() bool {
+	if t.stopped {
+		return false
+	}
 	shouldReconnect := true
 	if t.Reconnect != nil {
 		shouldReconnect = *t.Reconnect
@@ -55,7 +60,10 @@ func (t *SSHTunnel) Open() error {
 	if err != nil {
 		return fmt.Errorf("parsing target URL: %w", err)
 	}
-	t.cmd = exec.Command("ssh",
+
+	// Create context for command
+	t.ctx, t.cancel = context.WithCancel(context.Background())
+	t.cmd = exec.CommandContext(t.ctx, "ssh",
 		"-N",
 		"-o", "ServerAliveInterval=60",
 		"-o", "ServerAliveCountMax=3",
@@ -94,8 +102,7 @@ func (t *SSHTunnel) Open() error {
 	}
 
 	// Handle reconnection in background if enabled (default true)
-	if t.shouldReconnect() {
-		t.done = make(chan struct{})
+	if t.unlockedShouldReconnect() {
 		go t.monitorAndReconnect()
 	}
 
@@ -114,53 +121,38 @@ func (t *SSHTunnel) waitForSocket(timeout time.Duration) error {
 }
 
 func (t *SSHTunnel) monitorAndReconnect() {
-	cmdFinished := make(chan struct{})
+	t.mu.Lock()
+	ctx := t.ctx
+	t.mu.Unlock()
 
-	go func() {
+	select {
+	case _ = <-ctx.Done():
 		t.mu.Lock()
-		cmd := t.cmd
-		t.mu.Unlock()
-
-		cmd.Wait() // should be safe so long as cmd is not mutated
-		cmdFinished <- struct{}{}
-	}()
-
-	go func() {
-		t.mu.Lock()
-		done := t.done
 		defer t.mu.Unlock()
 
-		select {
-		case _ = <-cmdFinished:
-			log.Printf("SSH tunnel to %s exited", t.Host)
+		log.Printf("SSH tunnel to %s exited", t.Host)
 
-			if t.shouldReconnect() {
-				log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
-				time.Sleep(1 * time.Second) // Brief pause before reconnect
-				if err := t.Open(); err != nil {
-					log.Printf("Failed to reconnect SSH tunnel to %s: %v", t.Host, err)
-				}
+		if t.unlockedShouldReconnect() {
+			log.Printf("Reconnecting SSH tunnel to %s...", t.Host)
+			time.Sleep(1 * time.Second) // Brief pause before reconnect
+			if err := t.Open(); err != nil {
+				log.Printf("Failed to reconnect SSH tunnel to %s: %v", t.Host, err)
 			}
-
-		case _ = <-done:
 		}
-	}()
+	}
 }
 
 func (t *SSHTunnel) Close() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.done != nil {
-		t.done <- struct{}{} // stop the reconnection goroutine
-	}
-
-	if t.cmd != nil && t.cmd.Process != nil {
+	t.stopped = true
+	if t.cmd != nil {
 		t.cmd.Process.Kill()
+		t.cancel()
 	}
-
 	if t.socketPath != "" {
-		os.RemoveAll(t.socketPath)
+		os.RemoveAll(path.Dir(t.socketPath))
 	}
 }
 

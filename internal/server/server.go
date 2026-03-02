@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -35,6 +37,9 @@ type Server struct {
 	Config   *config.Config // readonly
 	Services map[string]*service.ServiceState
 	EventBus *event.EventBus
+
+	httpServer  *http.Server
+	httpsServer *http.Server
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -62,6 +67,16 @@ func (s *Server) Close() {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
+	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownRelease()
+
+	if s.httpServer != nil {
+		s.httpServer.Shutdown(shutdownCtx)
+	}
+	if s.httpsServer != nil {
+		s.httpsServer.Shutdown(shutdownCtx)
+	}
+
 	for _, state := range s.Services {
 		state.Mu.Lock()
 		defer state.Mu.Unlock()
@@ -83,18 +98,24 @@ func (s *Server) ServeForever() {
 	http.HandleFunc("/", s.handleRequest)
 
 	if s.Config.Listen.HTTP != "" {
+		s.httpServer = &http.Server{
+			Addr: s.Config.Listen.HTTP,
+		}
 		go func() {
 			log.Printf("Starting HTTP server on %s", s.Config.Listen.HTTP)
-			if err := http.ListenAndServe(s.Config.Listen.HTTP, nil); err != nil {
+			if err := s.httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 				log.Fatalf("HTTP server error: %v", err)
 			}
 		}()
 	}
 
 	if s.Config.Listen.HTTPS != "" && s.Config.SSLCertificate != "" && s.Config.SSLCertificateKey != "" {
+		s.httpsServer = &http.Server{
+			Addr: s.Config.Listen.HTTPS,
+		}
 		go func() {
 			log.Printf("Starting HTTPS server on %s", s.Config.Listen.HTTPS)
-			if err := http.ListenAndServeTLS(s.Config.Listen.HTTPS, s.Config.SSLCertificate, s.Config.SSLCertificateKey, nil); err != nil {
+			if err := s.httpsServer.ListenAndServeTLS(s.Config.SSLCertificate, s.Config.SSLCertificateKey); !errors.Is(err, http.ErrServerClosed) {
 				log.Fatalf("HTTPS server error: %v", err)
 			}
 		}()
