@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -103,6 +104,11 @@ func (s *Server) Shutdown() {
 func (s *Server) ServeForever() {
 	http.HandleFunc("/", s.handleRequest)
 
+	// Start event listener if on_event is configured
+	if len(s.Config.OnEvent) > 0 {
+		go s.listenEvents()
+	}
+
 	if s.Config.Listen.HTTP != "" {
 		s.httpServer = &http.Server{
 			Addr: s.Config.Listen.HTTP,
@@ -128,6 +134,50 @@ func (s *Server) ServeForever() {
 	}
 
 	select {}
+}
+
+func (s *Server) listenEvents() {
+	id, ch := s.EventBus.Subscribe()
+	defer s.EventBus.Unsubscribe(id)
+
+	for event := range ch {
+		handlers, ok := s.Config.OnEvent[event.Type]
+		if !ok {
+			continue
+		}
+		for _, cmd := range handlers {
+			// Build arguments with replacements
+			args := make([]string, 0)
+			// Split command into parts (simple whitespace splitting for now)
+			// In a real implementation you might want more sophisticated splitting
+			// but per spec we treat each string in the array as a separate argument
+			// The YAML already provides an array of strings, so we can use that directly.
+			// However we need to replace placeholders in each string.
+			// The spec says: "replace all in each string: `$<TYPE>` with the type and `$<SERVICE>` with the name of the service"
+			// So we process each element of the array (cmd is one element).
+			processed := strings.ReplaceAll(cmd, "$<TYPE>", event.Type)
+			processed = strings.ReplaceAll(processed, "$<SERVICE>", event.Service)
+			args = append(args, processed)
+		}
+		if len(args) == 0 {
+			continue
+		}
+		// Execute command
+		go func(cmdArgs []string) {
+			// cmdArgs[0] is the command, rest are arguments
+			cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+			// Run in background; we ignore output/errors for simplicity
+			if err := cmd.Start(); err != nil {
+				log.Printf("Failed to start command %v: %v", cmdArgs, err)
+			}
+			// Detach from the command; we don't wait for it
+			go func() {
+				if err := cmd.Wait(); err != nil {
+					log.Printf("Command %v exited with error: %v", cmdArgs, err)
+				}
+			}()
+		}(args)
+	}
 }
 
 func getClientIP(r *http.Request) string {

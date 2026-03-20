@@ -24,6 +24,7 @@ type Config struct {
 	Services            map[string]*service.Service `yaml:"services"`
 	ServicesBySubdomain map[string]service.NamedService
 	AltHosts            map[string]*althost.AltHost `yaml:"alt_hosts"`
+	OnEvent             map[string][]string         `yaml:"on_event"`
 }
 
 func LoadConfig(path string) (*Config, error) {
